@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}學習行為回饋系統{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>學習行為回饋系統</h1>
+        <!-- templates/layout.html (nav 部分修改) -->
+    <nav>
+        {% if current_user.is_authenticated %}
+            <span>歡迎, {{ current_user.username }} ({{ current_user.role }}) </span>
+            {% if current_user.role == 'student' %}
+                <a href="{{ url_for('student_report_page') }}" onclick="logUserClick('nav_student_report_layout')">查看我的學習行為報告</a>
+            {% elif current_user.role == 'teacher' %}
+                <a href="{{ url_for('teacher_dashboard_page') }}" onclick="logUserClick('nav_teacher_dashboard_layout')">教師儀表板</a>
+            {% endif %}
+            <a href="{{ url_for('logout') }}" onclick="logUserClick('nav_logout_layout')">登出</a>
+        {% else %}
+            <a href="{{ url_for('login_page') }}">登入</a>
+            <a href="{{ url_for('register_page') }}">註冊新學生</a> {# 新增註冊鏈接 #}
+        {% endif %}
+    </nav>
+    </header>
+        <main>
+            <div class="container"> <!-- 主要內容容器 -->
+                {% block content_wrapper %} <!-- 允許子模板覆蓋內部結構 -->
+                <div class="content-section"> <!-- 默認內容區塊 -->
+                    {% block content %}{% endblock %}
+                </div>
+                {% endblock %}
+            </div>   
+        </main>
+    <footer>
+        <p>© 2025 智慧學習系統</p>
+    </footer>
+    <!-- 通用 JS 或頁面特定 JS -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

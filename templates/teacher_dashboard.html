@@ -1,0 +1,28 @@
+{% extends "layout.html" %}
+{% block title %}教師儀表板 - 學生行為摘要{% endblock %}
+{% block content %}
+<div class="dashboard-container content-section">
+    <h2>教師儀表板 - 學生學習行為摘要</h2>
+    <p>以下摘要顯示了每位學生的總體活動情況。</p> {# 可以加一些說明文字 #}
+    <div class="table-responsive-wrapper">
+        <table id="studentsActivityTable" class="dashboard-table">
+            <thead>
+                <tr>
+                    <th>學生姓名/ID</th>
+                    <th>總點擊次數</th>
+                    <th>報告頁停留時間 (估算)</th>
+                    <th>操作</th> {# 例如查看該學生詳細報告的鏈接 #}
+                </tr>
+            </thead>
+            <tbody id="studentsActivityTableBody"> {# 給 tbody 一個 ID 更方便操作 #}
+                <tr>
+                    <td colspan="4" style="text-align:center;">正在加載學生數據...</td> {# 初始提示 #}
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+    <script src="{{ url_for('static', filename='js/teacher_dashboard.js') }}"></script>
+{% endblock %}

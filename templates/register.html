@@ -1,0 +1,39 @@
+{% extends "layout.html" %}
+
+{% block title %}註冊新學生帳號{% endblock %}
+
+{% block content %}
+<div class="register-container content-section"> {# 使用 content-section class 統一風格 #}
+    <h2>註冊新學生帳號</h2>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <ul class="flashes">
+            {% for category, message in messages %}
+                <li class="{{ category }}">{{ message }}</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
+    <form method="POST" action="{{ url_for('register_page') }}" id="registerForm">
+        <div>
+            <label for="username">學生姓名 (可中文):</label>
+            <input type="text" id="username" name="username" required>
+        </div>
+        <div>
+            <label for="password">設定密碼:</label>
+            <input type="password" id="password" name="password" required>
+        </div>
+        <div>
+            <label for="confirm_password">確認密碼:</label>
+            <input type="password" id="confirm_password" name="confirm_password" required>
+        </div>
+        <button type="submit" onclick="logUserClick('button_register_submit')">註冊</button>
+    </form>
+    <p style="margin-top: 20px;"><a href="{{ url_for('login_page') }}">已經有帳號了？前往登入</a></p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+    <!-- 如果需要客戶端驗證，可以在這裡引入或編寫JS -->
+    <!-- <script src="{{ url_for('static', filename='js/register_validation.js') }}"></script> -->
+{% endblock %}

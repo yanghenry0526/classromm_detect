@@ -1,0 +1,35 @@
+{% extends "layout.html" %}
+
+{% block title %}用戶登入{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <h2>用戶登入</h2>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <p class="{{ category }}">{{ message }}</p>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    <form id="loginForm" method="POST">
+        <div>
+            <label for="username">帳號:</label>
+            <input type="text" id="username" name="username" value="a123" required>
+        </div>
+        <div>
+            <label for="password">密碼:</label>
+            <input type="password" id="password" name="password" value="a123" required>
+        </div>
+        <button type="submit" onclick="logUserClick('button_login_submit')">登入</button>
+    </form>
+    <p>學生測試帳號: a123 / a123</p>
+    <p>教師測試帳號: b123 / b123</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+    <!-- <script src="{{ url_for('static', filename='js/auth.js') }}"></script> -->
+    <!-- 登入頁面的JS可以直接寫在 main.js 或 auth.js 中，
+         如果使用 Flask 傳統表單提交，則不需要太多客戶端JS處理登入本身 -->
+{% endblock %}

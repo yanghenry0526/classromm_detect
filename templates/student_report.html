@@ -1,0 +1,98 @@
+{% extends "layout.html" %}
+{% block title %}學生課堂行為分析報告{% endblock %}
+
+{% block content %}
+<div class="content-section"> {# 主內容容器 #}
+    <h2>學生課堂行為分析報告</h2>
+    <div id="reportSelectorArea" style="margin-bottom: 20px; padding: 10px; background-color: #f0f0f0; border-radius: 5px; display: flex; align-items: center;">
+        <label for="reportSelector" style="margin-right: 10px;">選擇報告日期:</label>
+        <select id="reportSelector" name="report_selector">
+            <option value="">正在加載報告列表...</option>
+        </select>
+        <button id="loadReportButton" style="margin-left: 10px;">查看選定報告</button>
+    </div>
+
+    <div id="reportDisplayArea" style="display: none;">
+        {# 報告元數據，放在標籤頁外部，因為它們適用於整個報告 #}
+        <div id="reportMetaDataHeader" style="text-align: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px;">
+            <p>學生ID: <span id="studentIdDisplay"></span></p>
+            <p id="reportGenerationTime"><span class="report-time-label">報告生成時間 :</span> <span id="actualReportTime"></span></p>
+        </div>
+        
+        <section id="analysisSourceSectionGlobal" style="margin-bottom:20px; display:none;"> {# 全局的分析來源統計 #}
+            <h3 style="font-size: 1.2em; color: #555;">分析來源與總體統計</h3>
+            <ul style="list-style-type: none; padding-left: 0; font-size: 0.9em;">
+                <li>影像來源資料夾: <span id="imageSourceFolderGlobal"></span></li>
+                <li>共找到圖片數量: <span id="totalImagesFoundGlobal"></span></li>
+                <li>總分析圖片/批次: <span id="totalImagesAnalyzedGlobal"></span></li>
+            </ul>
+        </section>
+
+
+        {# ****** 標籤頁導航 ****** #}
+        <div class="tab-navigation">
+            <button class="tab-button active" onclick="openTab(event, 'summaryNotesTab')">AI觀察與建議</button>
+            <button class="tab-button" onclick="openTab(event, 'overallStatsTab')">整體行為統計</button>
+            <button class="tab-button" onclick="openTab(event, 'timelineTab')">行為趨勢圖</button>
+            <button class="tab-button" onclick="openTab(event, 'sequenceDetailsTab')">詳細序列分析</button> 
+            {# 您可以根據需要添加更多標籤頁，例如詳細序列分析 #}
+        </div>
+
+        {# ****** 標籤頁內容 ****** #}
+        <div id="summaryNotesTab" class="tab-content active-content">
+            <section id="summaryNotesSection">
+                <h3>AI 學習夥伴的觀察與建議</h3>
+                <p id="summaryGreeting"></p>
+                <p id="summaryPositiveFeedback"></p>
+                <p id="summaryObservationPoints"></p>
+                <p id="summaryDistractions"></p>
+                <p id="summarySuggestions"></p>
+                <p id="summaryEncouragement"></p>
+            </section>
+        </div>
+
+        <div id="overallStatsTab" class="tab-content">
+            <section id="overallBehaviorStatisticsSection">
+                <h3>整體行為統計</h3>
+                <div id="overallPieChartContainer" class="chart-placeholder-style" style="width: 100%;"></div>
+                <h4 style="margin-top: 20px; font-size: 1.1em;">詳細行為統計表:</h4>
+                <div class="table-responsive-wrapper">
+                    <table id="overallBehaviorTable">
+                        <thead>
+                            <tr><th>行為類別</th><th>次數</th><th>百分比</th><th>平均可信度</th></tr>
+                        </thead>
+                        <tbody id="overallBehaviorTableBody"></tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+        <div id="timelineTab" class="tab-content">
+            <section id="behaviorTimelineSection">
+                <h3>行為隨時間變化趨勢</h3>
+                <div id="behaviorLineChartContainer" class="chart-placeholder-style" style="width: 100%;"></div>
+            </section>
+        </div>
+        
+        {# 如果還需要顯示原始的序列分析文本，可以將其放入一個標籤頁 #}
+         
+        <div id="sequenceDetailsTab" class="tab-content">
+            <section id="imageBehaviorDetailsSection">
+                <h3>各圖片序列詳細分析</h3>
+                <div id="specificImageObservationsContainer"></div>
+            </section>
+        </div>
+       
+
+        <button onclick="if(typeof logUserClick === 'function') logUserClick('button_student_report_print_final'); window.print();" style="margin-top:20px;">打印報告</button>
+    </div>
+    <div id="loadingMessage" style="text-align:center; padding: 20px;">正在加載報告數據...</div>
+    <div id="errorMessage" style="color:red; text-align:center; padding: 20px; display:none;"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/student_report.js') }}"></script>
+{% endblock %}

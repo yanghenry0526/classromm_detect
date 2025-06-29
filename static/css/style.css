@@ -1,0 +1,513 @@
+/* --- 通用重置與基礎樣式 --- */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* 更現代的字體 */
+    margin: 0;
+    background-color: #f0f2f5; /* 稍微柔和的背景色 */
+    color: #333;
+    line-height: 1.6; /* 增加行高以提高可讀性 */
+}
+
+*, *::before, *::after {
+    box-sizing: border-box; /* 更好的盒模型 */
+}
+
+img, video, embed, object {
+    max-width: 100%; /* 彈性媒體 */
+    height: auto;
+}
+
+/* --- 容器與佈局 --- */
+.container { /* 可以用一個通用容器包裹主要內容 */
+    width: 90%; /* 使用百分比 */
+    max-width: 1200px; /* 最大寬度，避免在超大螢幕上過寬 */
+    margin: 0 auto; /* 居中 */
+    padding: 20px;
+}
+
+header {
+    background-color: #2c3e50; /* 深色導航欄 */
+    color: #ecf0f1;
+    padding: 1em 0;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+header h1 {
+    margin: 0;
+    font-size: 1.8em; /* 調整字體大小 */
+}
+
+header nav {
+    margin-top: 10px;
+}
+
+header nav a, header nav span, header nav button {
+    color: #ecf0f1;
+    margin: 0 10px; /* 稍微減小間距 */
+    text-decoration: none;
+    font-size: 0.95em;
+    background: none; /* 確保按鈕看起來像鏈接 */
+    border: none;
+    cursor: pointer;
+    padding: 5px 0;
+}
+header nav a:hover, header nav button:hover {
+    text-decoration: underline;
+    color: #1abc9c; /* 懸停顏色 */
+}
+
+
+main {
+    /* 移除之前的 max-width 和 margin, 移到 .container */
+    padding: 0; /* main 元素本身不需要 padding，由 .container 控制 */
+    background-color: transparent; /* 背景由 body 或 .container 控制 */
+    box-shadow: none; /* 陰影由 .container 控制 */
+}
+
+/* 內容區塊通用樣式 */
+.content-section {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    margin-bottom: 20px;
+}
+.content-section h2, .content-section h3, .content-section h4 {
+    color: #2c3e50;
+    margin-top: 0; /* 移除區塊內標題的上邊距 */
+}
+
+
+footer {
+    text-align: center;
+    padding: 20px;
+    background-color: #34495e; /* 與header類似的深色 */
+    color: #bdc3c7;
+    margin-top: 30px;
+    font-size: 0.9em;
+}
+
+/* --- 表單樣式 (Login Page) --- */
+.login-container {
+    /* .content-section 已經包含了背景和陰影 */
+    max-width: 450px; /* 限制登入表單寬度 */
+    margin: 40px auto; /* 居中並增加上下邊距 */
+}
+
+.login-container div {
+    margin-bottom: 18px; /* 稍微增加間距 */
+}
+
+.login-container label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 600; /* 加粗標籤 */
+}
+
+.login-container input[type="text"],
+.login-container input[type="password"] {
+    width: 100%; /* 佔滿父容器 */
+    padding: 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 1em;
+}
+
+.login-container button[type="submit"] {
+    background-color: #3498db; /* 換個主色調 */
+    color: white;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1em;
+    width: 100%; /* 按鈕也佔滿寬度 */
+    transition: background-color 0.2s ease;
+}
+
+.login-container button[type="submit"]:hover {
+    background-color: #2980b9;
+}
+
+.info { color: #3498db; }
+.error { color: #e74c3c; background-color: #fdd; padding: 10px; border-radius: 4px; }
+
+
+/* --- 報告與儀表板樣式 --- */
+.report-container, .dashboard-container {
+    /* .content-section 已經包含了背景和陰影 */
+}
+
+/* 表格 RWD: 在小螢幕上可能需要讓表格水平滾動，或者將其轉換為卡片式佈局 */
+.table-responsive-wrapper {
+    overflow-x: auto; /* 允許表格水平滾動 */
+    -webkit-overflow-scrolling: touch; /* iOS上的平滑滾動 */
+    margin-bottom: 15px;
+}
+table { /* 通用表格樣式 */
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    font-size: 0.9em; /* 稍微縮小表格字體 */
+}
+th, td {
+    border: 1px solid #e0e0e0; /* 更淺的邊框 */
+    padding: 10px 12px; /* 調整內邊距 */
+    text-align: left;
+    vertical-align: top; /* 垂直對齊頂部 */
+}
+th {
+    background-color: #f8f9fa; /* 更淺的表頭背景 */
+    font-weight: 600;
+}
+
+/* 圖表容器 */
+.chart-placeholder, #pieChartContainer, #lineChartContainer {
+    width: 100%;
+    position: relative;
+    min-height: 250px; /* 最小高度 */
+    border: 1px solid #e0e0e0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #fff;
+    margin-top: 15px;
+    color: #999;
+    font-size: 0.9em;
+    padding: 10px; /* 給佔位符一些內邊距 */
+}
+/* 確保 canvas 元素也能響應式 */
+.chart-placeholder canvas, #pieChartContainer canvas, #lineChartContainer canvas {
+    max-width: 100% !important; /* !important 可能需要覆蓋 Chart.js 的內聯樣式 */
+    height: auto !important;
+}
+
+#overallPieChartContainer {
+    position: relative; /* 確保響應式正常工作 */
+    margin: 20px auto;  /* 上下留白，並水平居中 */
+    height: 400px;      /* 【關鍵】設定一個你想要的高度，例如 400px */
+    width: 100%;        /* 寬度佔滿父容器 */
+    max-width: 450px;   /* 【關鍵】設定一個最大寬度，例如 450px，這樣在寬螢幕上圖表也不會過大 */
+}
+
+/* 學生報告中的特定觀察區塊 */
+.observation-block {
+    border: 1px solid #f0f0f0;
+    padding: 15px;
+    margin-bottom: 20px;
+    background-color: #fdfdfd;
+    border-radius: 6px;
+}
+.teacher-content-ref {
+    background-color: #e9f5ff;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin: 8px 0;
+    font-size: 0.9em;
+    border-left: 3px solid #3498db;
+}
+.blackboard-image-placeholder {
+    width: 100%; /* 佔滿寬度 */
+    max-width: 250px; /* 但給一個最大寬度 */
+    min-height: 150px;
+    border:1px solid #ccc;
+    margin:10px 0;
+    background-color:#f5f5f5;
+    display:flex;
+    flex-direction: column; /* 允許多行文本 */
+    align-items:center;
+    justify-content:center;
+    font-size:0.8em;
+    color:#aaa;
+    text-align: center;
+    padding: 5px;
+}
+
+#behaviorLineChartContainer {
+    position: relative; /* 確保響應式正常工作 */
+    margin: 20px auto;  /* 上下留白 */
+    width: 100%;        /* 【關鍵】寬度佔滿父容器 */
+    height: 500px;      /* 【關鍵】設定一個較大的預設高度，例如 500px */
+    min-height: 300px;  /* 確保在任何情況下都有一個最小高度 */
+}
+
+/* --- Media Queries --- */
+
+/* 小螢幕 (例如手機，寬度小於 768px) */
+@media (max-width: 768px) {
+    .container {
+        width: 95%; /* 在小螢幕上使用更大的百分比 */
+        padding: 10px;
+    }
+
+    header h1 {
+        font-size: 1.5em;
+    }
+    header nav {
+        display: flex; /* 讓導航項水平排列 */
+        flex-direction: column; /* 或 column 垂直排列 */
+        align-items: center; /* 居中 */
+    }
+    header nav a, header nav span, header nav button {
+        margin: 8px 0; /* 垂直排列時的間距 */
+        display: block; /* 讓每個鏈接獨佔一行 */
+        width: 100%; /* 如果需要，讓鏈接佔滿寬度 */
+        text-align: center;
+    }
+
+    .login-container {
+        margin: 20px auto;
+        padding: 15px;
+    }
+
+    /* 調整報告和儀表板的內邊距和字體 */
+    .report-container, .dashboard-container, .content-section {
+        padding: 15px;
+    }
+    .report-container h2, .dashboard-container h2 {
+        font-size: 1.5em;
+    }
+    .report-container h3, .dashboard-container h3, .content-section h3 {
+        font-size: 1.2em;
+    }
+
+    th, td {
+        padding: 8px; /* 減小表格內邊距 */
+        font-size: 0.85em; /* 進一步縮小表格字體 */
+    }
+
+    /* 對於非常小的螢幕，可以考慮隱藏某些次要信息或改變佈局 */
+    /* 例如，將表格的某些列轉換為堆疊顯示 (這需要更複雜的CSS或JS) */
+}
+
+
+/* 中等螢幕 (例如平板，寬度在 768px 和 1024px 之間) */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .container {
+        width: 85%;
+    }
+    /* 可以為平板做一些特定的佈局調整 */
+}
+
+
+/* static/css/style.css (新增部分) */
+
+.register-container {
+    max-width: 500px; /* 註冊表單可以稍微寬一點 */
+    margin: 40px auto;
+}
+
+.register-container div {
+    margin-bottom: 18px;
+}
+
+.register-container label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 600;
+}
+
+.register-container input[type="text"],
+.register-container input[type="password"] {
+    width: 100%; /* 佔滿父容器 */
+    padding: 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 1em;
+}
+
+.register-container button[type="submit"] {
+    background-color: #007bff; /* 不同的按鈕顏色 */
+    color: white;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1em;
+    width: 100%;
+    transition: background-color 0.2s ease;
+}
+
+.register-container button[type="submit"]:hover {
+    background-color: #0056b3;
+}
+
+/* Flash messages styles (通用) */
+ul.flashes {
+    list-style-type: none;
+    padding: 0;
+    margin-bottom: 20px;
+}
+ul.flashes li {
+    padding: 10px 15px;
+    margin-bottom: 10px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+}
+ul.flashes li.success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+ul.flashes li.error {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+ul.flashes li.info {
+    color: #0c5460;
+    background-color: #d1ecf1;
+    border-color: #bee5eb;
+}
+ul.flashes li.warning {
+    color: #856404;
+    background-color: #fff3cd;
+    border-color: #ffeeba;
+}
+
+/* static/css/style.css (新增) */
+.input-error {
+    border-color: red !important; /* 強調錯誤的輸入框 */
+}
+.input-error-message {
+    margin-top: 5px;
+}
+
+
+/* static/css/style.css (可以新增或修改) */
+
+/* ... 您已有的樣式 ... */
+
+.dashboard-table { /* 教師儀表板表格的特定樣式 */
+    margin-top: 20px;
+    font-size: 0.95em;
+}
+
+.dashboard-table th {
+    background-color: #e9ecef; /* 淺灰色表頭 */
+    color: #495057;
+    font-weight: 600;
+    padding: 12px 15px;
+}
+
+.dashboard-table td {
+    padding: 10px 15px;
+    border-bottom: 1px solid #dee2e6; /* 行之間的分隔線 */
+}
+
+.dashboard-table tbody tr:nth-child(even) {
+    background-color: #f8f9fa; /* 斑馬條紋 */
+}
+
+.dashboard-table tbody tr:hover {
+    background-color: #e2e6ea; /* 懸停高亮 */
+}
+
+.action-button { /* 如果添加操作按鈕 */
+    padding: 5px 10px;
+    font-size: 0.85em;
+    margin-right: 5px;
+    cursor: pointer;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 3px;
+}
+.action-button:hover {
+    background-color: #0056b3;
+}
+
+/* static/css/style.css (新增或修改) */
+#reportSelectorArea {
+    /* 樣式化報告選擇器區域 */
+    padding: 15px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    margin-bottom: 25px;
+    display: flex; /* 讓元素在一行內 */
+    align-items: center; /* 垂直居中 */
+}
+#reportSelectorArea label {
+    margin-right: 10px;
+    font-weight: bold;
+}
+#reportSelector {
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid #ced4da;
+    min-width: 200px; /* 給下拉菜單一個最小寬度 */
+}
+#loadReportButton {
+    padding: 8px 15px;
+    margin-left: 15px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+#loadReportButton:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+#loadReportButton:hover:not(:disabled) {
+    background-color: #0056b3;
+}
+
+#loadingMessage, #errorMessageDisplay { /* 保持不變，確保它們在HTML中存在 */
+    text-align: center;
+    padding: 20px;
+    font-size: 1.1em;
+}
+#errorMessageDisplay {
+    color: red;
+    display: none; /* 初始隱藏 */
+}
+
+/* static/css/style.css (新增標籤頁樣式) */
+
+.tab-navigation {
+    overflow: hidden;
+    border: 1px solid #ccc;
+    background-color: #f1f1f1;
+    margin-bottom: 15px;
+    border-radius: 5px;
+}
+
+.tab-navigation button {
+    background-color: inherit;
+    float: left;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    padding: 14px 16px;
+    transition: 0.3s;
+    font-size: 1em;
+    border-right: 1px solid #ccc;
+}
+.tab-navigation button:last-child {
+    border-right: none;
+}
+
+.tab-navigation button:hover {
+    background-color: #ddd;
+}
+
+.tab-navigation button.active {
+    background-color: #ccc;
+    font-weight: bold;
+}
+
+.tab-content {
+    display: none; /* 默認隱藏所有標籤內容 */
+    padding: 10px 12px;
+    border: 1px solid #ccc;
+    border-top: none;
+    background-color: #fff; /* 給內容區塊一個背景 */
+    border-radius: 0 0 5px 5px;
+}
+
+.tab-content.active-content {
+    display: block; /* 顯示當前活動的標籤內容 */
+}
