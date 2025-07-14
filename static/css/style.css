@@ -511,3 +511,180 @@ ul.flashes li.warning {
 .tab-content.active-content {
     display: block; /* 顯示當前活動的標籤內容 */
 }
+
+/* Modal (彈出視窗) 的樣式 */
+.modal {
+    display: none; /* 預設隱藏 */
+    position: fixed; /* 固定在視窗中 */
+    z-index: 1000; /* 確保在最上層 */
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto; /* 如果內容過多則滾動 */
+    background-color: rgba(0,0,0,0.6); /* 半透明黑色背景 */
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 5% auto; /* 上下5%邊距，水平居中 */
+    padding: 20px;
+    border: 1px solid #888;
+    width: 80%; /* 視窗寬度 */
+    max-width: 1200px; /* 最大寬度 */
+    border-radius: 8px;
+    position: relative;
+}
+
+.close-button {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    position: absolute;
+    top: 10px;
+    right: 20px;
+}
+
+.close-button:hover,
+.close-button:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+#modalImageGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+    max-height: 70vh; /* 限制圖片區域最大高度，使其可滾動 */
+    overflow-y: auto; /* 垂直滾動 */
+    padding-top: 10px;
+}
+
+.modal-image {
+    width: 100%;
+    height: auto;
+    border-radius: 4px;
+    cursor: pointer; /* 讓圖片看起來可以點擊（例如放大）*/
+    transition: transform 0.2s;
+}
+
+.modal-image:hover {
+    transform: scale(1.05);
+}
+
+/* Accordion (手風琴/折疊列表) 的樣式 - 用於頁簽3 */
+.accordion-btn {
+    background-color: #eee;
+    color: #444;
+    cursor: pointer;
+    padding: 12px 18px;
+    width: 100%;
+    border: none;
+    text-align: left;
+    outline: none;
+    font-size: 1.1em;
+    transition: 0.4s;
+    margin-top: 5px;
+    border-radius: 4px;
+}
+
+.accordion-btn.active, .accordion-btn:hover {
+    background-color: #ccc;
+}
+
+.panel {
+    padding: 0 18px;
+    background-color: white;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.2s ease-out;
+}
+
+.behavior-list {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+.behavior-item {
+    padding: 8px;
+    margin: 4px 0;
+    background-color: #f0f8ff;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.behavior-item:hover {
+    background-color: #d1eaff;
+}
+
+/* 批次容器 (每個 Batch 的外層 div) */
+.sequence-block {
+    background-color: #f9f9f9; /* 淺灰色背景 */
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 25px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.sequence-block h4 {
+    margin-top: 0;
+    color: #333;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 10px;
+}
+
+/* 圖片與文字的網格佈局容器 */
+.details-grid {
+    display: grid;
+    /* 【修改】減小最小寬度，讓更多項目能擠在一行 */
+    grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+    gap: 10px; /* 也可以稍微縮小間距，讓整體更緊湊 */
+}   
+
+/* 每個圖片+文字的單項容器 */
+.detail-item {
+    display: flex;
+    flex-direction: column; /* 讓圖片和文字垂直排列 */
+    background-color: #ffffff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    overflow: hidden; /* 確保圓角效果能裁剪圖片 */
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.detail-item:hover {
+    transform: translateY(-5px); /* 滑鼠懸浮時輕微上移 */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+/* 序列中的圖片樣式 */
+.sequence-image {
+    width: 100%;       /* 佔滿容器寬度 */
+    height: auto;      /* 高度自動，保持比例 */
+    aspect-ratio: 4 / 3; /* 固定圖片長寬比，讓佈局更整齊 */
+    object-fit: cover; /* 裁剪圖片以填充容器，不變形 */
+    display: block;
+}
+
+/* 圖片下方的文字描述區域 */
+.detail-text {
+    padding: 15px;
+    font-size: 0.9em;
+    line-height: 1.5;
+}
+
+.detail-text strong {
+    color: #2c3e50; /* 深藍灰色，更柔和 */
+    display: block;
+    margin-bottom: 5px;
+}
+
+.detail-text small {
+    color: #7f8c8d; /* 灰色文字 */
+    font-style: italic;
+}
