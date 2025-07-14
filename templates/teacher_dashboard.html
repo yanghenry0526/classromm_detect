@@ -1,28 +1,79 @@
 {% extends "layout.html" %}
-{% block title %}教師儀表板 - 學生行為摘要{% endblock %}
 {% block content %}
 <div class="dashboard-container content-section">
     <h2>教師儀表板 - 學生學習行為摘要</h2>
-    <p>以下摘要顯示了每位學生的總體活動情況。</p> {# 可以加一些說明文字 #}
-    <div class="table-responsive-wrapper">
-        <table id="studentsActivityTable" class="dashboard-table">
-            <thead>
-                <tr>
-                    <th>學生姓名/ID</th>
-                    <th>總點擊次數</th>
-                    <th>報告頁停留時間 (估算)</th>
-                    <th>操作</th> {# 例如查看該學生詳細報告的鏈接 #}
-                </tr>
-            </thead>
-            <tbody id="studentsActivityTableBody"> {# 給 tbody 一個 ID 更方便操作 #}
-                <tr>
-                    <td colspan="4" style="text-align:center;">正在加載學生數據...</td> {# 初始提示 #}
-                </tr>
-            </tbody>
-        </table>
+    <p>在此儀表板中，您可以從不同維度查看學生的網站使用情況與課堂行為分析。</p>
+
+    <div class="dashboard-controls">
+        <label for="dateSelector">選擇報告日期:</label>
+        <select id="dateSelector" name="date_selector">
+            <option value="">正在加載日期...</option>
+        </select>
+        <button id="loadReportButton">查詢</button>
+    </div>
+
+    <!-- ****** 標籤頁導航 ****** -->
+    <div class="tab-navigation">
+        <button class="tab-button active" onclick="openTeacherTab(event, 'webActivityTab')">網站活動摘要</button>
+        <button class="tab-button" onclick="openTeacherTab(event, 'behaviorStatsTab')">課堂行為統計</button>
+        <button class="tab-button" onclick="openTeacherTab(event, 'imageExplorerTab')">行為影像瀏覽</button>
+    </div>
+
+    <!-- ****** 標籤頁內容 ****** -->
+    <div id="loadingMessage" style="text-align:center; padding: 40px; font-size: 1.2em;">正在加載所有學生數據...</div>
+    <div id="errorMessage" style="color:red; text-align:center; padding: 20px; display:none;"></div>
+
+    <!-- 頁簽 1: 網站活動摘要 -->
+    <div id="webActivityTab" class="tab-content" style="display: none;">
+        <h3>學生網站活動摘要</h3>
+        <p>此表格顯示每位學生在報告頁面的互動情況。</p>
+        <div class="table-responsive-wrapper">
+            <table id="webActivityTable" class="dashboard-table">
+                <thead>
+                    <tr>
+                        <th>學生姓名</th>
+                        <th>報告頁面互動</th>
+                        <th>各分頁停留時間</th>
+                    </tr>
+                </thead>
+                <tbody id="webActivityTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 頁簽 2: 課堂行為統計 -->
+    <div id="behaviorStatsTab" class="tab-content" style="display: none;">
+        <h3>學生課堂行為統計</h3>
+        <p>此表格顯示每位學生最新報告中的行為佔比，並由高到低排列。</p>
+        <div id="behaviorStatsContainer">
+            <!-- 學生行為統計表格將由JS動態生成於此 -->
+        </div>
+    </div>
+
+    <!-- 頁簽 3: 行為影像瀏覽 -->
+    <div id="imageExplorerTab" class="tab-content" style="display: none;">
+        <h3>學生行為影像瀏覽</h3>
+        <p>點擊學生姓名展開其行為列表，再點擊具體行為即可瀏覽對應的影像。</p>
+        <div id="imageExplorerContainer">
+            <!-- 學生行為影像瀏覽器將由JS動態生成於此 -->
+        </div>
+    </div>
+</div>
+
+<!-- ****** 彈出視窗 (Modal) ****** -->
+<div id="imageModal" class="modal">
+    <div class="modal-content">
+        <span class="close-button">×</span>
+        <h3 id="modalTitle">行為影像預覽</h3>
+        <div id="modalImageGrid">
+            <!-- 圖片將由JS動態加載於此 -->
+        </div>
     </div>
 </div>
 {% endblock %}
+
 {% block scripts %}
+    {# 我們不需要 Chart.js 了，可以移除或保留以備不時之需 #}
     <script src="{{ url_for('static', filename='js/teacher_dashboard.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 {% endblock %}
