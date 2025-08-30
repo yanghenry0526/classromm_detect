@@ -3,6 +3,30 @@
 // --- 全局變量 ---
 let allStudentData = []; // 用於緩存從API獲取的所有學生數據
 
+const ALL_BEHAVIOR_CATEGORIES = [
+    "主動舉手",
+    "被動舉手",
+    "做筆記",
+    "喝水",
+    "飲食",
+    "坐姿直立",
+    "托腮",
+    "玩弄手部/文具",
+    "目視他處",
+    "目視同學",
+    "目視教師",
+    "目視書本/筆記",
+    "目視黑板",
+    "被遮擋/無法判斷",
+    "觸摸臉部",
+    "觸摸頭髮",
+    "身體前傾",
+    "身體後靠",
+    "低頭(非學習)",
+    "趴睡"
+    // 請確保這裡的中文名稱與您 JSON 報告中可能出現的所有 behavior_category 完全一致
+];
+
 // --- 輔助函數 ---
 function escapeHtmlJs(unsafe) {
     if (typeof unsafe !== 'string') {
@@ -77,27 +101,40 @@ function populateBehaviorStatsTab(data) {
         studentDiv.className = 'student-behavior-card';
         
         const reportSummary = student.report_summary || {};
-        const behaviorStats = reportSummary.behavior_statistics || [];
+        const behaviorStatsFromServer = reportSummary.behavior_statistics || [];
+
+        // 關鍵步驟：將後端返回的列表轉換為一個方便查找的 Map (物件)
+        // 例如：{ "做筆記": { category: "做筆記", count: 23, ... }, "喝水": { ... } }
+        const statsMap = new Map(behaviorStatsFromServer.map(stat => [stat.behavior_category, stat]));
 
         let studentHtml = `<h4>${escapeHtmlJs(student.student_name)} (報告日期: ${escapeHtmlJs(reportSummary.report_date || 'N/A')})</h4>`;
 
-        if (behaviorStats.length > 0) {
+        if (behaviorStatsFromServer.length > 0) {
             studentHtml += `
                 <div class="table-responsive-wrapper">
                     <table class="dashboard-table compact-table">
                         <thead><tr><th>行為類別</th><th>百分比</th><th>次數</th></tr></thead>
                         <tbody>
             `;
-            // 這裡已經由後端排序，直接渲染即可
-            behaviorStats.forEach(stat => {
+            
+            // ★★★ 核心邏輯修改：遍歷我們定義好的完整行為列表 ★★★
+            ALL_BEHAVIOR_CATEGORIES.forEach(categoryName => {
+                // 從 Map 中查找該行為的數據
+                const stat = statsMap.get(categoryName);
+                
+                // 如果找到了，就用真實數據；如果找不到，就用 0
+                const percentage = stat ? stat.percentage : 0;
+                const count = stat ? stat.count : 0;
+
                 studentHtml += `
                     <tr>
-                        <td>${escapeHtmlJs(stat.behavior_category)}</td>
-                        <td>${stat.percentage}%</td>
-                        <td>${stat.count}</td>
+                        <td>${escapeHtmlJs(categoryName)}</td>
+                        <td>${percentage}%</td>
+                        <td>${count}</td>
                     </tr>
                 `;
             });
+
             studentHtml += '</tbody></table></div>';
         } else {
             studentHtml += '<p>無可用的行為統計數據。</p>';
@@ -108,7 +145,7 @@ function populateBehaviorStatsTab(data) {
     });
 }
 
-// 頁簽3：渲染行為影像瀏覽器
+// 頁簽3：渲染行為影像瀏覽器 (修正後，可顯示完整列表的版本)
 function populateImageExplorerTab(data) {
     const container = document.getElementById('imageExplorerContainer');
     if (!container) return;
@@ -124,27 +161,38 @@ function populateImageExplorerTab(data) {
         const panel = document.createElement('div');
         panel.className = 'panel';
 
-        const behaviorIndex = student.report_summary?.behavior_to_images_index;
-        if (behaviorIndex && Object.keys(behaviorIndex).length > 0) {
-            const list = document.createElement('ul');
-            list.className = 'behavior-list';
-            for (const [behavior, images] of Object.entries(behaviorIndex)) {
-                if (images.length > 0) {
-                    const listItem = document.createElement('li');
-                    listItem.className = 'behavior-item';
-                    listItem.textContent = `${escapeHtmlJs(behavior)} (${images.length} 張)`;
-                    listItem.dataset.studentName = student.student_name;
-                    listItem.dataset.behavior = behavior;
-                    listItem.dataset.images = JSON.stringify(images); // 將圖片列表存儲在data屬性中
-                    listItem.dataset.reportFilename = student.report_summary.latest_report_filename; // 假設後端會提供這個
-                    listItem.onclick = () => showImageModal(listItem.dataset);
-                    list.appendChild(listItem);
-                }
+        const reportSummary = student.report_summary || {};
+        const behaviorIndex = reportSummary.behavior_to_images_index || {}; // 安全地獲取物件
+
+        // 即使沒有任何影像索引，我們依然要創建列表結構
+        const list = document.createElement('ul');
+        list.className = 'behavior-list';
+
+        // ★★★ 核心邏輯修改：遍歷我們在頂部定義的完整行為列表 ★★★
+        ALL_BEHAVIOR_CATEGORIES.forEach(categoryName => {
+            // 從後端數據中查找該行為對應的圖片數組
+            const images = behaviorIndex[categoryName] || []; // 如果找不到，就用一個空數組
+            
+            const listItem = document.createElement('li');
+            listItem.className = 'behavior-item';
+            listItem.textContent = `${escapeHtmlJs(categoryName)} (${images.length} 張)`;
+
+            // 只有當圖片數量大於0時，才讓它可以點擊
+            if (images.length > 0) {
+                listItem.classList.add('clickable'); // 添加一個 class 以便美化樣式 (可選)
+                listItem.dataset.studentName = student.student_name;
+                listItem.dataset.behavior = categoryName;
+                listItem.dataset.images = JSON.stringify(images);
+                listItem.dataset.reportFilename = reportSummary.latest_report_filename;
+                listItem.onclick = () => showImageModal(listItem.dataset);
+            } else {
+                listItem.classList.add('disabled'); // 圖片數為0的項目設為不可點擊樣式 (可選)
             }
-            panel.appendChild(list);
-        } else {
-            panel.innerHTML = '<p>無可用的行為影像索引。</p>';
-        }
+            
+            list.appendChild(listItem);
+        });
+
+        panel.appendChild(list);
 
         accordionBtn.onclick = function() {
             this.classList.toggle("active");
@@ -161,6 +209,54 @@ function populateImageExplorerTab(data) {
     });
 }
 
+function populateCrossStudentTab(data) {
+    const container = document.getElementById('crossStudentImageContainer');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (!data || Object.keys(data).length === 0) {
+        container.innerHTML = '<p class="text-center">此日期無可供瀏覽的行為影像。</p>';
+        return;
+    }
+
+    const accordionContainer = document.createElement('div');
+    for (const [behavior, imagesWithInfo] of Object.entries(data)) {
+        const behaviorDiv = document.createElement('div');
+        
+        const accordionBtn = document.createElement('button');
+        accordionBtn.className = 'accordion-btn';
+        accordionBtn.textContent = `${escapeHtmlJs(behavior)} (${imagesWithInfo.length} 張)`;
+        
+        const panel = document.createElement('div');
+        panel.className = 'panel';
+        
+        // 這裡我們直接創建一個“點擊查看”的按鈕，而不是列表
+        const viewButton = document.createElement('button');
+        viewButton.textContent = '點擊查看所有影像';
+        viewButton.className = 'view-images-button';
+        // 將所有需要的數據綁定到按鈕上
+        viewButton.dataset.behavior = behavior;
+        viewButton.dataset.imagesInfo = JSON.stringify(imagesWithInfo); // 包含學生、報告和圖片名的完整列表
+        
+        viewButton.onclick = () => showCrossStudentImageModal(viewButton.dataset);
+
+        panel.appendChild(viewButton);
+
+        accordionBtn.onclick = function() {
+            this.classList.toggle("active");
+            if (panel.style.maxHeight) {
+                panel.style.maxHeight = null;
+            } else {
+                panel.style.maxHeight = panel.scrollHeight + "px";
+            } 
+        };
+        
+        behaviorDiv.appendChild(accordionBtn);
+        behaviorDiv.appendChild(panel);
+        accordionContainer.appendChild(behaviorDiv);
+    }
+    container.appendChild(accordionContainer);
+}
 
 // --- Modal 彈出視窗邏輯 ---
 function showImageModal(dataset) {
@@ -199,6 +295,43 @@ function showImageModal(dataset) {
     });
 }
 
+function showCrossStudentImageModal(dataset) {
+    const modal = document.getElementById("imageModal");
+    const modalTitle = document.getElementById("modalTitle");
+    const modalImageGrid = document.getElementById("modalImageGrid");
+    
+    const { behavior, imagesInfo } = dataset;
+    
+    modalTitle.textContent = `行為總覽: ${escapeHtmlJs(behavior)}`;
+    modalImageGrid.innerHTML = '<p class="text-center">正在加載圖片...</p>';
+    modal.style.display = "block";
+    
+    const imageInfoArray = JSON.parse(imagesInfo);
+    modalImageGrid.innerHTML = ''; // 清空
+
+    imageInfoArray.forEach(info => {
+        const imgContainer = document.createElement('div');
+        imgContainer.className = 'modal-image-container-with-label'; // 給容器一個class以便添加樣式
+
+        const img = document.createElement('img');
+        const imgSrc = `/api/get_sequence_image?report_file=${encodeURIComponent(info.report_filename)}&image_file=${encodeURIComponent(info.image_filename)}`;
+        
+        img.src = imgSrc;
+        img.alt = `${info.student_name} - ${info.image_filename}`;
+        img.title = `${info.student_name} - ${info.image_filename}`;
+        img.className = 'modal-image';
+        img.loading = 'lazy';
+
+        // 創建一個標籤來顯示學生姓名
+        const label = document.createElement('div');
+        label.className = 'image-label';
+        label.textContent = escapeHtmlJs(info.student_name);
+        
+        imgContainer.appendChild(img);
+        imgContainer.appendChild(label); // 將圖片和標籤都放入容器
+        modalImageGrid.appendChild(imgContainer);
+    });
+}
 
 // --- 主邏輯：頁面加載完成後執行 ---
 document.addEventListener('DOMContentLoaded', function() {
@@ -254,40 +387,55 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // --- API 呼叫：根據日期獲取學生摘要數據 ---
     function loadReportData() {
-        const selectedDate = dateSelector.value;
-        let apiUrl = '/api/teacher/all_students_activity_summary';
-        if (selectedDate) {
-            apiUrl += `?date=${selectedDate}`;
+        // 【修改前】
+        // const selectedDate = dateSelector.value || dateSelector.options[0].value; 
+        
+        // 【修改後】的邏輯
+        let selectedDate = dateSelector.value;
+        // 如果選中的是"載入最新報告"(其value為"")，並且下拉選單中確實有其他日期選項
+        if (selectedDate === "" && dateSelector.options.length > 1) {
+            // 就自動選取第二個選項的值，因為第一個是"載入最新報告"，第二個才是最新的日期
+            selectedDate = dateSelector.options[1].value;
         }
 
+        // 現在，如果 selectedDate 仍然是空的，那才代表真的沒有日期可以查詢
+        if (!selectedDate) {
+            handleError(new Error("沒有可供查詢的報告日期。"));
+            return;
+        }
+
+        let summaryApiUrl = `/api/teacher/all_students_activity_summary?date=${selectedDate}`;
+        let behaviorApiUrl = `/api/teacher/behavior_summary_by_date?date=${selectedDate}`;
+
         loadingMessage.style.display = 'block';
-        loadingMessage.textContent = `正在查詢 ${selectedDate || '最新'} 的報告數據...`;
+        loadingMessage.textContent = `正在查詢 ${selectedDate} 的報告數據...`;
         errorMessage.style.display = 'none';
         tabContents.forEach(tab => tab.style.display = 'none');
         document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
 
+        // 使用 Promise.all 並行獲取兩種數據
+        Promise.all([
+            fetch(summaryApiUrl).then(res => res.json()),
+            fetch(behaviorApiUrl).then(res => res.json())
+        ])
+        .then(([summaryData, behaviorData]) => {
+            // 檢查兩個請求是否都成功
+            if (summaryData.error) { throw new Error(summaryData.error); }
+            if (behaviorData.error) { throw new Error(behaviorData.error); }
+            
+            allStudentData = summaryData; // 緩存學生為單位的數據
+            
+            // 渲染所有標籤頁
+            renderAllTabs(summaryData, behaviorData);
 
-        fetch(apiUrl)
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(err => { throw new Error(err.error || '伺服器響應錯誤'); });
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.error) { throw new Error(data.error); }
-                
-                allStudentData = data;
-                renderAllTabs(allStudentData);
-
-                loadingMessage.style.display = 'none';
-                // 默認顯示第一個標籤頁
-                const firstTab = document.getElementById('webActivityTab');
-                if (firstTab) firstTab.style.display = 'block';
-                const firstTabButton = document.querySelector('.tab-button');
-                if (firstTabButton) firstTabButton.classList.add('active');
-            })
-            .catch(handleError);
+            loadingMessage.style.display = 'none';
+            // 默認顯示第一個標籤頁
+            const firstTab = document.getElementById('webActivityTab');
+            if (firstTab) firstTab.style.display = 'block';
+            const firstTabButton = document.querySelector('.tab-button');
+            if (firstTabButton) firstTabButton.classList.add('active');
+        })
+        .catch(handleError);
     }
 
     // --- 統一的錯誤處理函數 ---
@@ -299,10 +447,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // --- 數據渲染主函數 ---
-    function renderAllTabs(data) {
-        populateWebActivityTab(data);
-        populateBehaviorStatsTab(data);
-        populateImageExplorerTab(data);
+    function renderAllTabs(summaryData, behaviorData) {
+        populateWebActivityTab(summaryData);
+        populateBehaviorStatsTab(summaryData);
+        populateImageExplorerTab(summaryData);
+        populateCrossStudentTab(behaviorData);
     }
 
     // --- 事件監聽 ---

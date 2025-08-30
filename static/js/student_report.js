@@ -60,7 +60,7 @@ function prepareGanttChartData(sequenceDataArray) {
     }
 
     const coreStates = {
-        '高度專注': { color: 'rgba(75, 192, 192, 0.8)', behaviors: new Set(['筆記', '舉手']) },
+        '高度專注': { color: 'rgba(75, 192, 192, 0.8)', behaviors: new Set(['做筆記', '舉手']) },
         '接收資訊': { color: 'rgba(54, 162, 235, 0.8)', behaviors: new Set(['目視教師', '目視黑板', '目視書本', '翻閱書本', '身體前傾', '坐姿直立']) },
         '潛在分心': { color: 'rgba(255, 159, 64, 0.8)', behaviors: new Set(['玩弄物品', '目視同學', '目視他處', '整理個人物品', '喝水/飲食', '身體後靠']) },
         '狀態不明/休息': { color: 'rgba(150, 150, 150, 0.7)', behaviors: new Set(['低頭', '趴睡', '無明顯特定行為', '被遮擋/無法判斷']) }
@@ -231,124 +231,136 @@ function openTab(evt, tabIdToOpen) {
     logStudentActivity('tab_view_start', currentOpenTabId);
 }
 
-
 // --- 主邏輯：頁面加載完成後執行 ---
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
+    // 獲取所有必要的頁面元素
     const reportDisplayArea = document.getElementById('reportDisplayArea');
     const loadingMessage = document.getElementById('loadingMessage');
     const errorMessageDisplay = document.getElementById('errorMessage');
     const reportSelector = document.getElementById('reportSelector');
     const loadReportButton = document.getElementById('loadReportButton');
-
-    if (typeof current_flask_user_id !== 'undefined') {
-        current_user_id_for_beacon = current_flask_user_id;
-    }
-
+    
+    // 初始化頁面元素檢查
     if (!reportDisplayArea || !loadingMessage || !errorMessageDisplay || !reportSelector || !loadReportButton) {
-        console.error("One or more critical page elements for report display are missing.");
-        if (errorMessageDisplay) {
-            errorMessageDisplay.textContent = "頁面初始化錯誤，缺少必要的顯示組件，請聯繫管理員。";
+        console.error("頁面初始化錯誤：缺少關鍵的報告顯示組件。");
+        if(errorMessageDisplay) { // 確保元素存在
+            errorMessageDisplay.textContent = "頁面初始化錯誤，請聯繫管理員。";
             errorMessageDisplay.style.display = 'block';
         }
-        if (loadingMessage) loadingMessage.style.display = 'none';
         return;
     }
-
-    console.log('Student behavior report JS (with tabs) loaded.');
+    
     logStudentActivity('page_view_start', 'student_report_main_page');
-
+    setupImageModal();
+    // 初始狀態設置
     reportDisplayArea.style.display = 'none';
-    loadingMessage.style.display = 'block';
     loadingMessage.textContent = '正在加載報告列表...';
+    loadingMessage.style.display = 'block';
     errorMessageDisplay.style.display = 'none';
     loadReportButton.disabled = true;
 
-    fetch('/api/student/reports_list')
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(err => { throw new Error(`獲取報告列表失敗: ${response.status} - ${err.error || '未知伺服器錯誤'}`);
-                }).catch(() => { throw new Error(`獲取報告列表失敗: ${response.status} (無法解析錯誤響應)`); });
-            }
-            return response.json();
-        })
-        .then(reports => {
-            reportSelector.innerHTML = '';
-            if (reports && Array.isArray(reports) && reports.length > 0) {
-                reports.forEach(report => {
-                    const option = document.createElement('option');
-                    option.value = report.filename;
-                    option.textContent = report.display_name;
-                    reportSelector.appendChild(option);
-                });
-                loadSpecificReport(reports[0].filename);
-                loadReportButton.disabled = false;
-            } else {
-                const option = document.createElement('option'); option.value = ""; option.textContent = "暫無可用報告"; reportSelector.appendChild(option);
-                loadingMessage.textContent = "暫無可用報告。"; reportDisplayArea.style.display = 'none';
-            }
-        })
-        .catch(error => {
-            console.error('獲取報告列表失敗:', error);
-            loadingMessage.style.display = 'none';
-            errorMessageDisplay.textContent = `無法加載報告列表: ${escapeHtml(error.message)}`;
-            errorMessageDisplay.style.display = 'block';
-            reportSelector.innerHTML = '<option value="">加載列表失敗</option>';
-        });
+    // 使用 try...catch 處理整個初始化流程的錯誤
+    try {
+        // 步驟 1: 異步獲取報告列表
+        const response = await fetch('/api/student/reports_list');
+        if (!response.ok) throw new Error(`獲取報告列表失敗 (HTTP ${response.status})`);
+        const reports = await response.json();
+        if (reports.error) throw new Error(reports.error);
 
+        // 填充下拉選單
+        reportSelector.innerHTML = '';
+        if (reports && reports.length > 0) {
+            reports.forEach(report => {
+                const option = document.createElement('option');
+                option.value = report.filename;
+                option.textContent = report.display_name;
+                reportSelector.appendChild(option);
+            });
+            loadReportButton.disabled = false;
+            
+            // 步驟 2: 異步加載並顯示最新的報告
+            await loadAndDisplayReport(reports[0].filename);
+
+        } else {
+            loadingMessage.textContent = "暫無可用報告。";
+        }
+        
+    } catch (error) {
+        console.error('頁面初始化過程中發生錯誤:', error);
+        loadingMessage.style.display = 'none';
+        errorMessageDisplay.textContent = `無法初始化頁面: ${escapeHtml(error.message)}`;
+        errorMessageDisplay.style.display = 'block';
+        reportSelector.innerHTML = '<option value="">加載列表失敗</option>';
+    }
+
+    // 為“查看報告”按鈕添加事件監聽
     loadReportButton.addEventListener('click', function() {
         const selectedFilename = reportSelector.value;
         if (selectedFilename) {
             logStudentActivity('click', `button_load_report_${selectedFilename}`);
-            loadSpecificReport(selectedFilename);
-        } else {
-            errorMessageDisplay.textContent = "請先選擇一份報告。"; errorMessageDisplay.style.display = 'block';
+            loadAndDisplayReport(selectedFilename);
         }
     });
 
-    function loadSpecificReport(filename) {
+    // 將原有的 loadSpecificReport 函數的邏輯移到一個新的總控函數中
+    async function loadAndDisplayReport(filename) {
         reportDisplayArea.style.display = 'none';
-        loadingMessage.style.display = 'block'; loadingMessage.textContent = `正在加載報告 "${escapeHtml(filename)}"...`;
+        loadingMessage.style.display = 'block';
+        loadingMessage.textContent = `正在加載報告 "${escapeHtml(filename)}"...`;
         errorMessageDisplay.style.display = 'none';
 
+        // 重置標籤頁計時器
         if (currentOpenTabId && currentTabStartTime) {
-            const endTime = new Date();
-            const durationMs = endTime - currentTabStartTime;
-            logStudentActivity('tab_view_end', currentOpenTabId, durationMs / 1000);
+            logStudentActivity('tab_view_end', currentOpenTabId, (new Date() - currentTabStartTime) / 1000);
             currentOpenTabId = null;
             currentTabStartTime = null;
         }
 
-        fetch(`/api/student/report?report_file=${encodeURIComponent(filename)}`)
-            .then(response => {
-                if (!response.ok) {
-                     return response.json().then(err => { throw new Error(`HTTP error! status: ${response.status}, message: ${err.error || `無法加載報告 ${filename}`}`);
-                    }).catch(() => { throw new Error(`HTTP error! status: ${response.status}, and response was not valid JSON.`); });
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.error) { throw new Error(data.error); }
-                populateStudentBehaviorReport(data, filename);
-                loadingMessage.style.display = 'none';
-                reportDisplayArea.style.display = 'block';
-                
-                const firstTabButton = document.querySelector('.tab-navigation .tab-button');
-                if (firstTabButton) {
-                    const defaultTabIdMatch = firstTabButton.getAttribute('onclick').match(/'([^']+)'/);
-                    if (defaultTabIdMatch && defaultTabIdMatch[1]) {
-                         openTab({currentTarget: firstTabButton}, defaultTabIdMatch[1]);
-                    }
-                }
-            })
-            .catch(error => {
-                console.error(`加載報告 ${filename} 失敗:`, error);
-                loadingMessage.style.display = 'none';
-                errorMessageDisplay.textContent = `無法加載報告 "${escapeHtml(filename)}": ${escapeHtml(error.message)}`;
-                errorMessageDisplay.style.display = 'block'; reportDisplayArea.style.display = 'none';
-            });
+        try {
+            // 步驟 A: 獲取行為報告數據
+            const behaviorResponse = await fetch(`/api/student/report?report_file=${encodeURIComponent(filename)}`);
+            if (!behaviorResponse.ok) throw new Error(`獲取行為報告失敗 (HTTP ${behaviorResponse.status})`);
+            const behaviorReportData = await behaviorResponse.json();
+            if (behaviorReportData.error) throw new Error(behaviorReportData.error);
+            
+            // 步驟 B: 填充行為報告相關內容
+            populateStudentBehaviorReport(behaviorReportData, filename);
+
+            // 步驟 C: 根據行為報告的日期，異步獲取課堂筆記數據
+            const metadata = behaviorReportData.report_metadata || {};
+            const reportDateStr = getStandardDate(metadata.report_generation_time);
+            
+            console.log(`[診斷] 正在為行為報告解析出的日期是: ${reportDateStr}`);
+
+            if (reportDateStr) {
+                // await 確保筆記內容加載完畢
+                await populateKnowledgeHub(reportDateStr);
+                await populateWorkbook(reportDateStr);
+            } else {
+                 const hubContainer = document.getElementById('knowledgeHubContainer');
+                 if (hubContainer) {
+                    hubContainer.innerHTML = '<p class="text-center">無法從行為報告中確定日期，無法加載課堂筆記。</p>';
+                 }
+            }
+            
+            // 步驟 D: 所有數據都準備好後，才顯示內容
+            loadingMessage.style.display = 'none';
+            reportDisplayArea.style.display = 'block';
+            
+            // 步驟 E: 打開默認的第一個頁簽
+            const firstTabButton = document.querySelector('.tab-navigation .tab-button');
+            if (firstTabButton) {
+                firstTabButton.click(); // 直接模擬點擊
+            }
+
+        } catch (error) {
+            console.error(`加載報告 ${filename} 失敗:`, error);
+            loadingMessage.style.display = 'none';
+            errorMessageDisplay.textContent = `無法加載報告: ${escapeHtml(error.message)}`;
+            errorMessageDisplay.style.display = 'block';
+        }
     }
 });
-
 
 function populateStudentBehaviorReport(reportData, reportFilename) {
     console.log("Populating report with data for:", reportFilename);
@@ -419,7 +431,7 @@ function populateStudentBehaviorReport(reportData, reportFilename) {
             stats.forEach(item => {
                 const row = tableBody.insertRow();
                 row.insertCell().textContent = item.behavior_category || 'N/A';
-                row.insertCell().textContent = item.count || 0;
+                // row.insertCell().textContent = item.count || 0;
                 row.insertCell().textContent = `${item.percentage || 0}%`;
                 row.insertCell().textContent = typeof item.average_confidence === 'number' ? item.average_confidence.toFixed(2) : "N/A";
             });
@@ -627,6 +639,415 @@ function populateStudentBehaviorReport(reportData, reportFilename) {
             specificObsContainer.innerHTML = '<p>無詳細序列分析數據可顯示。</p>';
         }
     }
+
+
+}
+
+function getStandardDate(dateString) {
+    if (!dateString) return null;
+    
+    // 嘗試解析 '2025-07-06 12:34:56'
+    let match = dateString.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) return match[1];
+
+    // 嘗試解析 '07/06'
+    match = dateString.match(/^(\d{2})\/(\d{2})/);
+    if (match) {
+        const year = new Date().getFullYear(); // 假設是當前年份
+        return `${year}-${match[1]}-${match[2]}`;
+    }
+    
+    return null; // 如果格式未知
+}
+
+/** 
+ * @param {string} reportDate - 'YYYY-MM-DD' 格式的日期字符串。
+ * @returns {Promise<void>} 一個在操作完成後解析的 Promise。
+ */
+async function populateKnowledgeHub(reportDate) {
+    const hubContainer = document.getElementById('knowledgeHubContainer');
+    
+    // 步驟 1: 檢查容器是否存在，這是基本防錯
+    if (!hubContainer) {
+        console.error("Fatal Error: The container 'knowledgeHubContainer' was not found in the DOM.");
+        return;
+    }
+
+    // 步驟 2: 準備並顯示加載提示
+    const loadingMessage = document.createElement('div');
+    loadingMessage.className = 'text-center'; // 假設您有這個 CSS class 來居中文字
+    loadingMessage.style.padding = '20px'; // 增加一些內邊距
+    loadingMessage.textContent = `正在為您加載 ${reportDate} 的課堂筆記...`;
+    
+    hubContainer.innerHTML = ''; // 清空任何舊內容
+    hubContainer.appendChild(loadingMessage);
+
+    try {
+        // 步驟 3: 發起非同步 fetch 請求
+        const response = await fetch(`/api/student/get_note_report_for_date?date=${encodeURIComponent(reportDate)}`);
+
+        // 檢查 HTTP 響應狀態
+        if (!response.ok) {
+            // 嘗試解析錯誤的JSON體，如果有的話
+            const errorData = await response.json().catch(() => null); 
+            const errorMessage = errorData?.error || `獲取筆記失敗 (HTTP ${response.status})`;
+            throw new Error(errorMessage);
+        }
+        
+        const data = await response.json();
+        
+        // 檢查後端返回的業務邏輯錯誤
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
+        // 步驟 4: 處理成功獲取的數據
+        // 優先使用精煉後的數據
+        const refinedData = data.knowledge_hub_refined?.refined_knowledge_hub;
+        
+        if (refinedData && Array.isArray(refinedData) && refinedData.length > 0) {
+            // 【核心修改點】
+            // 調用渲染函數，並將 `reportDate` 作為第三個參數傳入
+            renderKnowledgeHubForStudent(refinedData, hubContainer, reportDate);
+        } else {
+            // 如果後端返回了特定訊息（例如“暫無筆記”），就顯示它
+            // 否則顯示一個通用的提示
+            const messageToShow = data.message || '暫無此日期的課堂筆記可供查看。';
+            hubContainer.innerHTML = `<p class="text-center">${escapeHtml(messageToShow)}</p>`;
+        }
+    } catch (error) {
+        // 步驟 5: 統一處理所有錯誤（網絡錯誤、解析錯誤、業務錯誤）
+        console.error(`獲取日期 ${reportDate} 的筆記時發生錯誤:`, error);
+        
+        // 在界面上顯示對用戶友好的錯誤訊息
+        hubContainer.innerHTML = `<p class="error-message" style="color: red; text-align: center;">無法加載課堂筆記: ${escapeHtml(error.message)}</p>`;
+    }
+}
+
+
+/**
+ * 【新增】專門為學生報告頁面渲染知識庫的函數
+ * @param {Array} hubData - 包含所有主題的陣列
+ * @param {HTMLElement} container - 要渲染內容的容器元素
+ * @param {string} reportDate - 當前報告的日期 (格式 YYYY-MM-DD)，用於構建圖片URL
+ */
+function renderKnowledgeHubForStudent(hubData, container, reportDate) { // 【修改點 1】新增 reportDate 參數
+    container.innerHTML = ''; // 清空加載提示
+
+    if (!reportDate) {
+        console.error("renderKnowledgeHubForStudent 錯誤: 未提供 reportDate，無法生成圖片路徑。");
+        // 可以選擇顯示一個錯誤訊息
+    }
+
+    hubData.forEach(topic => {
+        const topicItem = document.createElement('div');
+        topicItem.className = 'knowledge-topic-card';
+
+        const button = document.createElement('button');
+        button.className = 'accordion-button';
+        button.innerHTML = `<h3>${escapeHtml(topic.main_topic)}</h3>`;
+        
+        const panel = document.createElement('div');
+        panel.className = 'accordion-panel';
+
+        panel.innerHTML += `<div class="topic-section"><h4>AI 摘要</h4><p>${escapeHtml(topic.topic_summary)}</p></div>`;
+        panel.innerHTML += `<div class="topic-section"><h4>完整教學筆記</h4><div class="transcript-content">${escapeHtml(topic.refined_transcript_content).replace(/\n/g, '<br>')}</div></div>`;
+
+        if (topic.relevant_blackboard_images && topic.relevant_blackboard_images.length > 0) {
+            let imagesHTML = '<div class="topic-section"><h4>相關板書快照</h4><div class="image-gallery">';
+            topic.relevant_blackboard_images.forEach(imgPath => {
+                const imageName = imgPath.split('\\').pop().split('/').pop();
+                
+                // 【修改點 2】構建新的、包含日期的圖片 URL
+                const imageUrl = `/api/student/get_note_image/${encodeURIComponent(reportDate)}/${encodeURIComponent(imageName)}`;
+                
+                imagesHTML += `
+                    <div class="gallery-item">
+                        <img src="${imageUrl}" alt="${escapeHtml(imageName)}" loading="lazy" class="zoomable-image">
+                        <p>${escapeHtml(imageName)}</p>
+                    </div>`;
+            });
+            imagesHTML += '</div></div>';
+            panel.innerHTML += imagesHTML;
+        }
+
+        topicItem.appendChild(button);
+        topicItem.appendChild(panel);
+        container.appendChild(topicItem);
+        
+        // ... button click event listener ...
+        button.addEventListener('click', function() {
+            logStudentActivity('click', `student_report_toggle_note_${topic.main_topic}`);
+            this.classList.toggle('active');
+            const panel = this.nextElementSibling;
+            if (panel.style.maxHeight) {
+                panel.style.maxHeight = null;
+            } else {
+                panel.style.maxHeight = panel.scrollHeight + "px";
+            }
+        });
+    });
+}
+
+/**
+ * 【新增】輔助函數：從多種可能的日期格式中獲取 YYYY-MM-DD
+ * @param {string} dateString - 來自報告元數據的日期時間字串
+ * @returns {string|null} - 返回 'YYYY-MM-DD' 格式的字串，或在失敗時返回 null
+ */
+function getStandardDate(dateString) {
+    if (!dateString) return null;
+    
+    // 優先嘗試解析 '2025-07-06 12:34:56' 或 '2025-07-06'
+    let match = dateString.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) return match[1];
+
+    // 接著嘗試解析 '07/06'
+    match = dateString.match(/^(\d{1,2})\/(\d{1,2})/);
+    if (match) {
+        const year = new Date().getFullYear(); // 假設是當前年份
+        const month = match[1].padStart(2, '0'); // 確保月份是兩位數
+        const day = match[2].padStart(2, '0');   // 確保天是兩位數
+        return `${year}-${month}-${day}`;
+    }
+    
+    console.warn("無法從以下字串解析標準日期:", dateString);
+    return null; // 如果格式未知或不匹配
+}
+
+
+/**
+ * 【修改後的版本】
+ * 【新增】異步函數：根據日期獲取並渲染 AI 練習挑戰
+ * @param {string} reportDate - 'YYYY-MM-DD' 格式的日期
+ * @returns {Promise<void>}
+ */
+async function populateWorkbook(reportDate) {
+    const workbookContainer = document.getElementById('workbookContainer');
+    if (!workbookContainer) {
+        console.error("Fatal: Workbook container 'workbookContainer' not found in HTML!");
+        return;
+    }
+
+    const loadingMessage = document.createElement('p');
+    loadingMessage.className = 'text-center';
+    loadingMessage.style.padding = '20px';
+    loadingMessage.textContent = `正在為您加載 ${reportDate} 的練習...`;
+    
+    workbookContainer.innerHTML = ''; 
+    workbookContainer.appendChild(loadingMessage);
+
+    try {
+        const response = await fetch(`/api/student/get_workbook_report_for_date?date=${encodeURIComponent(reportDate)}`);
+        if (!response.ok) {
+            throw new Error(`獲取練習冊失敗 (HTTP ${response.status})`);
+        }
+        
+        const data = await response.json();
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        const workbookData = data.workbook_data?.refined_knowledge_hub;
+        if (workbookData && Array.isArray(workbookData) && workbookData.length > 0) {
+            // 【關鍵修改】呼叫 renderWorkbook 時，把 reportDate 作為第三個參數傳遞進去
+            renderWorkbook(workbookData, workbookContainer, reportDate);
+        } else {
+            workbookContainer.innerHTML = `<p class="text-center">${escapeHtml(data.message || '暫無此日期的練習可供查看。')}</p>`;
+        }
+    } catch (error) {
+        console.error(`獲取日期 ${reportDate} 的練習冊失敗:`, error);
+        workbookContainer.innerHTML = `<p class="error-message">無法加載練習: ${escapeHtml(error.message)}</p>`;
+    }
+}
+
+/**
+ * 【修正版】
+ * 渲染函數：將練習冊數據渲染為互動式任務卡片
+ * @param {Array} workbookData - 包含所有主題和測驗的陣列
+ * @param {HTMLElement} container - 要渲染內容的容器元素
+ * @param {string} reportDate - 當前報告的日期 (格式 YYYY-MM-DD)，用於構建圖片URL
+ */
+function renderWorkbook(workbookData, container, reportDate) {
+    container.innerHTML = ''; // 清空加載提示
+    window.g_workbookData = workbookData;
+
+    if (!reportDate) {
+        console.error("renderWorkbook 警告: 未提供 reportDate，練習冊中的圖片可能無法加載。");
+    }
+
+    workbookData.forEach((topic, topicIndex) => {
+        // --- 創建手風琴的基礎結構 ---
+        const missionCard = document.createElement('div');
+        missionCard.className = 'mission-card';
+
+        const button = document.createElement('button');
+        button.className = 'accordion-button';
+        button.innerHTML = `<h3>練習 #${topicIndex + 1}: ${escapeHtml(topic.main_topic)}</h3>`;
+        
+        const panel = document.createElement('div');
+        panel.className = 'accordion-panel';
+
+        // --- Part 1: 快速複習 ---
+        const reviewSection = document.createElement('div');
+        reviewSection.className = 'review-section';
+
+        let reviewHTML = `<h4>Part 1: 快速複習</h4>`;
+        reviewHTML += `<div class="topic-section"><h5>AI 摘要</h5><p>${escapeHtml(topic.topic_summary)}</p></div>`;
+        reviewHTML += `<div class="topic-section"><h5>完整教學筆記</h5><div class="transcript-content">${escapeHtml(topic.refined_transcript_content).replace(/\n/g, '<br>')}</div></div>`;
+        
+        if (topic.relevant_blackboard_images && topic.relevant_blackboard_images.length > 0) {
+            reviewHTML += '<div class="topic-section"><h5>相關板書畫面</h5><div class="image-gallery">';
+            topic.relevant_blackboard_images.forEach(imgPath => {
+                const imageName = imgPath.split('\\').pop().split('/').pop();
+                const imageUrl = reportDate ? `/api/student/get_note_image/${encodeURIComponent(reportDate)}/${encodeURIComponent(imageName)}` : '';
+                reviewHTML += `<div class="gallery-item"><img src="${imageUrl}" alt="${escapeHtml(imageName)}" loading="lazy" class="zoomable-image"></div>`;
+            });
+            reviewHTML += '</div></div>';
+        }
+        reviewSection.innerHTML = reviewHTML;
+        
+        // 【正確的追加方式 1】將複習部分添加到 panel
+        panel.appendChild(reviewSection);
+
+        // --- Part 2: 開始挑戰 (渲染表單) ---
+        const challengeSection = document.createElement('div');
+        challengeSection.className = 'challenge-section';
+        challengeSection.innerHTML = '<h4>Part 2: 開始練習！</h4>';
+
+        const form = document.createElement('form');
+        form.id = `quiz-form-${topicIndex}`;
+        form.addEventListener('submit', (e) => {
+            e.preventDefault(); 
+            checkAnswers(topicIndex);
+            logStudentActivity('click', `submit_quiz_${topic.main_topic}`);
+        });
+
+        if (topic.interactive_quiz && Array.isArray(topic.interactive_quiz)) {
+            topic.interactive_quiz.forEach((quizItem, quizIndex) => {
+                const questionDiv = document.createElement('div');
+                questionDiv.className = 'quiz-item';
+                
+                let questionHTML = `<p><strong>Q${quizIndex + 1}:</strong> ${escapeHtml(quizItem.question)}</p>`;
+
+                if (quizItem.type === 'multiple_choice' && quizItem.options) {
+                    quizItem.options.forEach(option => {
+                        questionHTML += `<label class="quiz-option"><input type="radio" name="quiz-${topicIndex}-${quizIndex}" value="${escapeHtml(option)}"> ${escapeHtml(option)}</label>`;
+                    });
+                } else if (quizItem.type === 'fill_in_the_blank') {
+                    questionHTML += `<input type="text" class="quiz-input" name="quiz-${topicIndex}-${quizIndex}" placeholder="請在此輸入答案">`;
+                }
+                
+                questionHTML += `<div class="feedback-area" id="feedback-${topicIndex}-${quizIndex}"></div>`;
+                questionDiv.innerHTML = questionHTML;
+                form.appendChild(questionDiv);
+            });
+        }
+
+        const submitButton = document.createElement('button');
+        submitButton.type = 'submit';
+        submitButton.className = 'submit-quiz-button';
+        submitButton.textContent = '提交答案';
+        form.appendChild(submitButton);
+
+        challengeSection.appendChild(form);
+        
+        // 【正確的追加方式 2】將挑戰部分添加到 panel
+        panel.appendChild(challengeSection);
+        
+        // --- 組合最終的卡片 ---
+        missionCard.appendChild(button);
+        missionCard.appendChild(panel);
+        container.appendChild(missionCard);
+        
+        // --- 添加手風琴點擊事件 ---
+        button.addEventListener('click', function() {
+            logStudentActivity('click', `toggle_workbook_${topic.main_topic}`);
+            this.classList.toggle('active');
+            const panelElement = this.nextElementSibling;
+            if (panelElement.style.maxHeight) {
+                panelElement.style.maxHeight = null;
+            } else {
+                panelElement.style.maxHeight = panelElement.scrollHeight + "px";
+            }
+        });
+    });
+}
+
+/**
+ * 【新增】核對答案並顯示即時回饋
+ * @param {number} topicIndex - 正在作答的主題索引
+ */
+function checkAnswers(topicIndex) {
+    // 從全局變數中獲取我們之前保存的數據
+    const topicData = window.g_workbookData[topicIndex];
+    if (!topicData) return;
+
+    topicData.interactive_quiz.forEach((quizItem, quizIndex) => {
+        const feedbackDiv = document.getElementById(`feedback-${topicIndex}-${quizIndex}`);
+        const formElements = document.getElementById(`quiz-form-${topicIndex}`).elements;
+        const inputGroup = formElements[`quiz-${topicIndex}-${quizIndex}`];
+        
+        let userAnswer = '';
+        if (quizItem.type === 'multiple_choice') {
+            userAnswer = inputGroup.value; // 對於 radio group，.value 直接獲取選中的值
+        } else if (quizItem.type === 'fill_in_the_blank') {
+            userAnswer = inputGroup.value.trim();
+        }
+
+        // 比較答案 (忽略大小寫差異)
+        if (userAnswer && userAnswer.toLowerCase() === quizItem.answer.toLowerCase()) {
+            feedbackDiv.innerHTML = `<p class="correct">✔️ 正確！</p>`;
+        } else {
+            feedbackDiv.innerHTML = `<p class="incorrect">❌ 錯誤。正確答案是: <strong>${escapeHtml(quizItem.answer)}</strong></p>`;
+        }
+        
+        // 無論對錯，都顯示答案解析
+        feedbackDiv.innerHTML += `<p class="explanation"><strong>解析：</strong>${escapeHtml(quizItem.explanation)}</p>`;
+    });
+}
+
+function setupImageModal() {
+    const modal = document.getElementById('imageModal');
+    const modalImg = document.getElementById('modalImage');
+    const captionText = document.getElementById('modalCaption');
+    const closeBtn = document.querySelector('.modal .close-button');
+
+    if (!modal || !modalImg || !captionText || !closeBtn) {
+        console.warn("Modal elements not found, image zoom functionality disabled.");
+        return;
+    }
+
+    // --- 核心邏輯：使用事件委派 (Event Delegation) ---
+    // 因為圖片是動態生成的，我們將點擊事件綁定到 document 上，然後檢查點擊的目標是否是我們想要的圖片。
+    document.addEventListener('click', function(event) {
+        // 檢查點擊的元素是否帶有 'zoomable-image' 這個 class
+        if (event.target.classList.contains('zoomable-image')) {
+            const clickedImage = event.target;
+
+            // 記錄點擊事件
+            logStudentActivity('click', `zoom_image_${clickedImage.alt}`);
+
+            // 設置 Modal 內容並顯示
+            modalImg.src = clickedImage.src;
+            captionText.textContent = clickedImage.alt; // 使用 alt 作為標題
+            modal.style.display = "block";
+        }
+    });
+
+    // --- 關閉 Modal 的邏輯 ---
+
+    // 1. 點擊關閉按鈕 (X)
+    closeBtn.onclick = function() { 
+        modal.style.display = "none";
+    }
+
+    // 2. 點擊 Modal 背景（遮罩層）時關閉
+    modal.onclick = function(event) {
+        // 確保點擊的是背景，而不是圖片本身
+        if (event.target === modal) {
+            modal.style.display = "none";
+        }
+    }
 }
 
 // 頁面卸載時記錄最後一個標籤頁的停留時間
@@ -652,4 +1073,4 @@ window.addEventListener('beforeunload', function (e) {
             logStudentActivity('tab_view_end_unload_fallback', currentOpenTabId, durationSec);
         }
     }
-});
+}); 

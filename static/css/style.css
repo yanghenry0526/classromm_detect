@@ -468,36 +468,39 @@ ul.flashes li.warning {
 /* static/css/style.css (新增標籤頁樣式) */
 
 .tab-navigation {
-    overflow: hidden;
-    border: 1px solid #ccc;
-    background-color: #f1f1f1;
-    margin-bottom: 15px;
-    border-radius: 5px;
+    display: flex; /* 使用 flexbox 佈局 */
+    border-bottom: 2px solid #dee2e6;
+    margin-bottom: 20px;
+    overflow: visible; /* 移除 overflow: hidden 以顯示下邊框 */
 }
 
 .tab-navigation button {
-    background-color: inherit;
-    float: left;
+    background-color: transparent; /* 背景透明 */
     border: none;
-    outline: none;
+    border-bottom: 3px solid transparent; /* 預留底部高亮邊框的位置 */
     cursor: pointer;
-    padding: 14px 16px;
-    transition: 0.3s;
-    font-size: 1em;
-    border-right: 1px solid #ccc;
-}
-.tab-navigation button:last-child {
-    border-right: none;
+    padding: 14px 20px;
+    transition: color 0.3s, border-color 0.3s; /* 平滑過渡效果 */
+    font-size: 1.05em;
+    font-weight: 500;
+    color: #6c757d; /* 未選中時的顏色 */
+    margin-bottom: -2px; /* 讓下邊框與父容器的邊框重合 */
+    float: none; /* 移除 float */
+    border-right: none; /* 移除右邊框 */
 }
 
 .tab-navigation button:hover {
-    background-color: #ddd;
+    color: #2c3e50; /* 滑鼠懸停時的顏色 */
+    background-color: transparent; /* 確保背景不變 */
 }
 
 .tab-navigation button.active {
-    background-color: #ccc;
-    font-weight: bold;
+    color: #3498db; /* 選中時的顏色 */
+    border-bottom-color: #3498db; /* 顯示下邊框高亮 */
+    font-weight: 600;
+    background-color: transparent;
 }
+
 
 .tab-content {
     display: none; /* 默認隱藏所有標籤內容 */
@@ -514,36 +517,68 @@ ul.flashes li.warning {
 
 /* Modal (彈出視窗) 的樣式 */
 .modal {
-    display: none; /* 預設隱藏 */
-    position: fixed; /* 固定在視窗中 */
-    z-index: 1000; /* 確保在最上層 */
+    display: none;
+    position: fixed;
+    z-index: 1000;
     left: 0;
     top: 0;
     width: 100%;
     height: 100%;
-    overflow: auto; /* 如果內容過多則滾動 */
-    background-color: rgba(0,0,0,0.6); /* 半透明黑色背景 */
+    overflow-y: auto; /* 只允許垂直滾動 */
+    background-color: rgba(10, 25, 41, 0.85); /* 深藍色調的深色背景 */
+    -webkit-backdrop-filter: blur(8px); /* 背景模糊效果 */
+    backdrop-filter: blur(8px);
+    padding: 30px; /* 四周留出邊距 */
 }
 
+/* Modal 內容容器 (透明，僅用於佈局) */
 .modal-content {
-    background-color: #fefefe;
-    margin: 5% auto; /* 上下5%邊距，水平居中 */
-    padding: 20px;
-    border: 1px solid #888;
-    width: 80%; /* 視窗寬度 */
-    max-width: 1200px; /* 最大寬度 */
-    border-radius: 8px;
     position: relative;
+    margin: auto;
+    padding: 0;
+    background: transparent; /* 移除背景 */
+    border: none;
+    width: 100%;
+    max-width: 1400px;
+    box-shadow: none; /* 移除陰影 */
 }
 
+/* Modal 中放大的圖片 */
+#modalImage { /* 【新增】專門為大圖設置樣式 */
+    width: auto; /* 寬度自動 */
+    height: auto; /* 高度自動 */
+    max-width: 100%; /* 最大寬度不超過父容器 */
+    max-height: 80vh; /* 【關鍵】最大高度為視窗高度的80%，避免圖片太大超出螢幕 */
+    border-radius: 5px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5); /* 給圖片加點陰影 */
+}
+
+/* 關閉按鈕 (X) */
 .close-button {
-    color: #aaa;
-    float: right;
-    font-size: 28px;
+    position: fixed; /* 固定在視窗右上角 */
+    top: 20px;
+    right: 30px;
+    color: #ffffff;
+    font-size: 45px;
     font-weight: bold;
-    position: absolute;
-    top: 10px;
-    right: 20px;
+    cursor: pointer;
+    transition: 0.3s;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    z-index: 1001; /* 確保在圖片之上 */
+}
+
+.close-button:hover,
+.close-button:focus {
+    color: #ccc;
+    text-decoration: none;
+}
+
+/* 圖片標題 (檔名) */
+#modalCaption { /* 【新增】為標題設置樣式 */
+    margin: 15px auto 0;
+    color: #ccc;
+    font-size: 1.1em;
+    padding-bottom: 150px; /* 【新增】給底部留足夠空間，避免標題被截斷 */
 }
 
 .close-button:hover,
@@ -555,26 +590,68 @@ ul.flashes li.warning {
 
 #modalImageGrid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 10px;
-    max-height: 70vh; /* 限制圖片區域最大高度，使其可滾動 */
-    overflow-y: auto; /* 垂直滾動 */
-    padding-top: 10px;
+    /* 響應式網格，minmax 確保最小寬度，1fr 讓其彈性填充 */
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); 
+    gap: 25px; /* 加大間距 */
+}
+
+.modal-image-container-with-label {
+    background-color: rgba(255, 255, 255, 0.05); /* 微妙的背景提亮 */
+    border: 1px solid rgba(255, 255, 255, 0.1); /* 微妙的邊框 */
+    border-radius: 8px; /* 圓角 */
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: background-color 0.3s, transform 0.3s;
 }
 
 .modal-image {
     width: 100%;
     height: auto;
-    border-radius: 4px;
-    cursor: pointer; /* 讓圖片看起來可以點擊（例如放大）*/
-    transition: transform 0.2s;
+    aspect-ratio: 4 / 3; /* 【關鍵】強制所有圖片容器為4:3比例 */
+    object-fit: cover;   /* 【關鍵】圖片會被裁切以填滿容器，但不會變形 */
+    border-radius: 6px;
+    display: block;
+}
+
+/* Modal 標題 */
+#modalTitle {
+    color: #fff;
+    text-align: center;
+    margin-bottom: 30px;
+    font-size: 1.8em;
+    font-weight: 300; /* 使用細字體 */
+    text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+
+.image-label {
+    margin-top: 10px;
+    font-size: 0.9em;
+    font-weight: 500;
+    color: #e0e0e0;
+    background-color: rgba(0, 0, 0, 0.3);
+    padding: 4px 10px;
+    border-radius: 12px; /* 膠囊形狀 */
+    text-align: center;
+    width: fit-content; /* 寬度自適應內容 */
 }
 
 .modal-image:hover {
     transform: scale(1.05);
 }
 
-/* Accordion (手風琴/折疊列表) 的樣式 - 用於頁簽3 */
+.zoomable-image {
+    cursor: pointer; /* 鼠標變為小手形狀 */
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+/* 鼠標懸停時的效果 */
+.zoomable-image:hover {
+    transform: scale(1.05); /* 輕微放大 */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); /* 增加更明顯的陰影 */
+}
+
 .accordion-btn {
     background-color: #eee;
     color: #444;
@@ -687,4 +764,406 @@ ul.flashes li.warning {
 .detail-text small {
     color: #7f8c8d; /* 灰色文字 */
     font-style: italic;
+}
+
+/* 整個筆記頁簽的容器 */
+.knowledge-hub-container {
+    margin-top: 20px;
+}
+
+/* 每個獨立主題的卡片式容器 */
+.knowledge-topic-card {
+    background-color: #ffffff;
+    border: 1px solid #e9ecef;
+    border-radius: 12px; /* 圓角更大，更柔和 */
+    margin-bottom: 20px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05); /* 增加立體感 */
+    overflow: hidden;
+    transition: all 0.3s ease-in-out;
+}
+
+/* --- 手風琴 (Accordion) 效果 --- */
+
+/* 手風琴按鈕 (主題標題) */
+.accordion-button {
+    background-color: #f8f9fa; /* 更淡的背景色 */
+    color: #343a40; /* 更深的字體色，對比更清晰 */
+    cursor: pointer;
+    padding: 20px 25px; /* 增加內邊距 */
+    width: 100%;
+    border: none;
+    text-align: left;
+    outline: none;
+    font-size: 1.2em; /* 標題字體更大 */
+    font-weight: 600; /* 字體稍粗 */
+    transition: background-color 0.3s ease;
+    position: relative; /* 為添加偽元素做準備 */
+    border-bottom: 1px solid #e9ecef; /* 按鈕底部加一條細線 */
+}
+
+/* 添加一個展開/收起的圖標 */
+.accordion-button::after {
+    content: '\25B6'; /* 瀏覽器會把這解讀為一個 Unicode 字符 */
+    font-size: 0.8em;
+    color: #007bff;
+    position: absolute;
+    right: 25px;
+    top: 50%;
+    transform: translateY(-50%) rotate(0deg);
+    transition: transform 0.3s ease-in-out;
+}
+
+.accordion-button.active::after {
+    transform: translateY(-50%) rotate(90deg); /* 點擊後旋轉90度 */
+}
+
+
+.accordion-button:hover {
+    background-color: #e9ecef;
+}
+
+/* 手風琴的可折疊面板 */
+.accordion-panel {
+    padding: 0 25px; /* 左右內邊距與按鈕對齊 */
+    background-color: white;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease-out, padding 0.4s ease-out; /* 動畫更平滑 */
+}
+
+/* 面板展開時的樣式 */
+.accordion-button.active + .accordion-panel {
+    padding: 25px; /* 展開時增加上下內邊距 */
+}
+
+/* --- 面板內部各區塊樣式 --- */
+
+/* 每個子區塊 (摘要, 筆記, 圖片) 的通用樣式 */
+.topic-section {
+    margin-bottom: 25px; /* 區塊間距更大 */
+}
+
+/* 子區塊標題 (AI 摘要, 完整教學筆記, ...) */
+.topic-section h4 {
+    color: #17a2b8; /* 換一個更柔和的藍色 */
+    font-size: 1.1em;
+    font-weight: 600;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #e0e0e0;
+}
+
+/* AI 摘要和完整筆記的段落樣式 */
+.topic-section p {
+    line-height: 1.7; /* 更大的行高，提升閱讀舒適度 */
+    color: #495057;
+}
+
+/* 專門為精煉後逐字稿設計的樣式 */
+.transcript-content {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    border-left: 4px solid #17a2b8; /* 左側加上一條高亮線，突出顯示 */
+    line-height: 1.6;
+    font-family: 'Segoe UI', 'Roboto', sans-serif; /* 使用更現代的無襯線字體 */
+    color: #333;
+}
+
+/* --- 圖片畫廊樣式 (關鍵優化) --- */
+.image-gallery {
+    display: grid;
+    /* 響應式佈局：在大螢幕上最多3欄，中等2欄，小螢幕1欄 */
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px; /* 圖片間距 */
+}
+
+.gallery-item {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 10px;
+    background-color: #fff;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    display: flex; /* 使用 flexbox 佈局 */
+    flex-direction: column; /* 垂直排列 */
+}
+
+.gallery-item:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
+.gallery-item img {
+    width: 100%; /* 讓圖片寬度填滿容器 */
+    height: 200px; /* 【關鍵】給定一個固定的高度 */
+    object-fit: cover; /* 【關鍵】保持圖片比例不變形，並裁剪多餘部分 */
+    border-radius: 6px;
+    cursor: pointer;
+    background-color: #f0f0f0; /* 圖片加載時的背景色 */
+}
+
+/* 圖片下方的檔名 */
+.gallery-item p {
+    margin-top: 10px;
+    font-size: 0.85em;
+    color: #6c757d;
+    word-break: break-all;
+    flex-grow: 1; /* 讓 p 標籤填滿剩餘空間，確保佈局一致 */
+    padding-top: 10px;
+    border-top: 1px solid #eee;
+}
+
+
+/* ==========================================================================
+   【新增】AI 練習挑戰頁簽樣式 (Workbook)
+   ========================================================================== */
+.workbook-container {
+    margin-top: 20px;
+}
+
+.mission-card {
+    background-color: #ffffff;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+}
+
+.mission-card .accordion-button i {
+    margin-right: 10px;
+    color: #fd7e14; /* 橘色圖標 */
+}
+
+.mission-section {
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #f1f1f1;
+}
+.mission-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.mission-section h4 {
+    color: #6c757d;
+    font-size: 1.1em;
+    margin-bottom: 15px;
+}
+
+.review-content p {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    line-height: 1.6;
+}
+
+.quiz-form .question-block {
+    margin-bottom: 25px;
+    padding: 15px;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+}
+
+.quiz-form .question-block p {
+    margin-bottom: 10px;
+}
+
+.options-group .option {
+    margin-bottom: 8px;
+}
+
+.options-group input[type="radio"] {
+    margin-right: 8px;
+}
+
+.blank-input {
+    width: 80%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.submit-quiz-button {
+    background-color: #007bff;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.3s;
+}
+
+.submit-quiz-button:hover {
+    background-color: #0056b3;
+}
+
+.feedback-container {
+    margin-top: 15px;
+    padding: 10px;
+    border-radius: 5px;
+}
+
+.feedback.correct {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.feedback.incorrect {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.explanation {
+    margin-top: 8px;
+    font-size: 0.9em;
+    color: #6c757d;
+    padding-left: 10px;
+    border-left: 3px solid #ccc;
+}
+
+
+.mission-card {
+    border: 1px solid #ddd;
+    margin-bottom: 15px;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.review-section, .challenge-section {
+    padding: 25px;
+    border-top: 1px solid #eee;
+}
+
+.challenge-section h4, .review-section h4 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #007bff;
+    padding-bottom: 5px;
+    color: #333;
+}
+
+.quiz-item {
+    position: relative;
+    margin-bottom: 25px; /* 問題卡片之間的間距，防止重疊 */
+    padding: 20px;       /* 卡片內部留白，讓內容不擁擠 */
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    background-color: #ffffff; /* 讓問題卡片在灰色背景上更突出 */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.quiz-item:last-of-type {
+    margin-bottom: 0;
+}
+
+/* 選擇題的選項樣式 (與您原版相似) */
+.quiz-option {
+    display: block; /* 讓每個選項佔一行 */
+    margin-bottom: 10px; /* 選項之間的間距 */
+    cursor: pointer;
+    font-size: 16px;
+}
+
+/* 填空題的輸入框樣式 (與您原版相似) */
+.quiz-input {
+    width: 100%;
+    max-width: 400px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 16px;
+}
+
+.submit-quiz-button {
+    background-color: #28a745; /* 統一使用綠色作為提交按鈕顏色 */
+    color: white;
+    padding: 12px 30px; /* 增加按鈕大小，更易點擊 */
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    margin-top: 30px; /* 【關鍵】與最後一個問題卡片的垂直間距 */
+    display: inline-block; /* 配合 text-align: center 使用 */
+    transition: background-color 0.2s ease-in-out, transform 0.1s ease;
+}
+
+.submit-quiz-button:hover {
+    background-color: #218838;
+}
+
+.submit-quiz-button:active {
+    transform: scale(0.98); /* 增加點擊時的微小下沉效果 */
+}
+
+.feedback-area {
+    margin-top: 20px; /* 與上方問題內容的間距 */
+    padding-top: 15px; /* 回饋內容頂部的留白 */
+    border-top: 1px dashed #cccccc; /* 在回饋區上方加一條虛線，做視覺區隔 */
+}
+
+/* 答對的提示框 */
+.feedback-area .correct {
+    color: #155724;
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+    padding: 12px;
+    border-radius: 5px;
+    margin: 0;
+}
+
+/* 答錯的提示框 */
+.feedback-area .incorrect {
+    color: #721c24;
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    padding: 12px;
+    border-radius: 5px;
+    margin: 0;
+}
+
+/* 答案解析的樣式 (與您原版相似) */
+.feedback-area .explanation {
+    margin-top: 10px;
+    font-size: 0.9em;
+    color: #444; /* 顏色稍微加深，更易讀 */
+    border-left: 3px solid #b0b0b0;
+    padding-left: 10px;
+}
+
+.modal-image-container-with-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 15px; /* 與其他圖片的間距 */
+}
+
+.image-label {
+    margin-top: 5px;
+    font-size: 0.9em;
+    font-weight: bold;
+    color: #333;
+    background-color: #f0f0f0;
+    padding: 2px 8px;
+    border-radius: 5px;
+}
+
+.view-images-button {
+    padding: 8px 15px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    margin: 10px;
+}
+
+.view-images-button:hover {
+    background-color: #0056b3;
 }
