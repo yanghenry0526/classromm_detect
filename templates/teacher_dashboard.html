@@ -17,6 +17,7 @@
         <button class="tab-button active" onclick="openTeacherTab(event, 'webActivityTab')">網站活動摘要</button>
         <button class="tab-button" onclick="openTeacherTab(event, 'behaviorStatsTab')">課堂行為統計</button>
         <button class="tab-button" onclick="openTeacherTab(event, 'imageExplorerTab')">行為影像瀏覽</button>
+        <button class="tab-button" onclick="openTeacherTab(event, 'crossStudentImageTab')">跨學生行為總覽</button>
     </div>
 
     <!-- ****** 標籤頁內容 ****** -->
@@ -70,6 +71,15 @@
         </div>
     </div>
 </div>
+
+<div id="crossStudentImageTab" class="tab-content" style="display: none;">
+    <h3>跨學生行為總覽</h3>
+    <p>選擇日期後，此處將列出該日所有課堂行為。點擊具體行為，即可瀏覽當天所有學生的該行為影像。</p>
+    <div id="crossStudentImageContainer">
+        <!-- 跨學生行為影像瀏覽器將由JS動態生成於此 -->
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}

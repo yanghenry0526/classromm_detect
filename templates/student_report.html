@@ -31,11 +31,14 @@
 
         {# ****** 標籤頁導航 ****** #}
         <div class="tab-navigation">
-            <button class="tab-button active" onclick="openTab(event, 'summaryNotesTab')">AI觀察與建議</button>
-            <button class="tab-button" onclick="openTab(event, 'overallStatsTab')">整體行為統計</button>
-            <button class="tab-button" onclick="openTab(event, 'timelineTab')">行為趨勢圖</button>
-            <button class="tab-button" onclick="openTab(event, 'sequenceDetailsTab')">詳細序列分析</button> 
-            {# 您可以根據需要添加更多標籤頁，例如詳細序列分析 #}
+            <button class="tab-button active" onclick="openTab(event, 'summaryNotesTab')">AI行為觀察</button>
+            <button class="tab-button" onclick="openTab(event, 'overallStatsTab')">行為統計</button>
+            <button class="tab-button" onclick="openTab(event, 'timelineTab')">行為趨勢</button>
+            <!-- 【新增】下面是新的頁簽按鈕 -->
+            <button class="tab-button" onclick="openTab(event, 'knowledgeHubTab')">AI課堂筆記</button>
+            <button class="tab-button active" onclick="openTab(event, 'workbookTab')">AI練習</button>
+
+            <button class="tab-button" onclick="openTab(event, 'sequenceDetailsTab')">詳細序列分析</button>
         </div>
 
         {# ****** 標籤頁內容 ****** #}
@@ -59,7 +62,12 @@
                 <div class="table-responsive-wrapper">
                     <table id="overallBehaviorTable">
                         <thead>
-                            <tr><th>行為類別</th><th>次數</th><th>百分比</th><th>平均可信度</th></tr>
+                            <tr>
+                                <th>行為類別</th>
+                                <!-- <th>次數</th> -->
+                                <th>百分比</th>
+                                <th>平均可信度</th>
+                            </tr>
                         </thead>
                         <tbody id="overallBehaviorTableBody"></tbody>
                     </table>
@@ -82,12 +90,42 @@
                 <div id="specificImageObservationsContainer"></div>
             </section>
         </div>
+        
+        <div id="knowledgeHubTab" class="tab-content">
+            <h3>AI 智慧課堂筆記</h3>
+            <p>這是由 AI 分析老師的課堂講解與板書後，為你生成的個人化主題筆記，幫助你高效複習！</p>
+            
+            <div id="knowledgeHubContainer" class="knowledge-hub-container">
+                <!-- 筆記內容將由 JS 動態生成於此 -->
+                <div id="notesLoadingMessage" style="text-align:center; padding: 20px;">正在為您加載課堂筆記...</div>
+            </div>
+        </div>
        
+        <div id="workbookTab" class="tab-content">
+            <h3>AI 練習</h3>
+            <p>根據課堂筆記的每個主題，AI 為你生成了專屬的練習，來檢驗一下學習成效吧！</p>
+            
+            <div id="workbookContainer" class="workbook-container">
+                <!-- 練習任務卡片將由 JS 動態生成於此 -->
+                <!-- <p id="workbookLoadingMessage" class="text-center" style="padding: 20px;">正在為您加載挑戰任務...</p> -->
+            </div>
+        </div>
 
-        <button onclick="if(typeof logUserClick === 'function') logUserClick('button_student_report_print_final'); window.print();" style="margin-top:20px;">打印報告</button>
+
     </div>
     <div id="loadingMessage" style="text-align:center; padding: 20px;">正在加載報告數據...</div>
     <div id="errorMessage" style="color:red; text-align:center; padding: 20px; display:none;"></div>
+
+    <!-- ****** 【新增】Modal (彈出視窗) ****** -->
+    <div id="imageModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">×</span> 
+            <img class="modal-image" id="modalImage" src="" alt="放大的板書圖片">
+            <div id="modalCaption"></div>
+        </div>
+    </div>
+    <!-- ****** Modal 結束 ****** -->
+
 </div>
 {% endblock %}
 
