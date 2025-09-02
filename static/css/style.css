@@ -1167,3 +1167,416 @@ ul.flashes li.warning {
 .view-images-button:hover {
     background-color: #0056b3;
 }
+
+/* ==========================================================================
+   【新增】聚焦標註模式 (Focus Tagging Mode) 相關樣式
+   ========================================================================== */
+
+/* 1. 模糊背景效果 */
+.dashboard-container.is-blurred > *:not(.focus-overlay) {
+    filter: blur(5px) brightness(0.7);
+    transition: filter 0.3s ease-in-out;
+    pointer-events: none; /* 防止使用者點擊到模糊的背景內容 */
+}
+
+/* 2. 聚焦標註懸浮層 (Overlay) */
+.focus-overlay {
+    position: fixed; /* 固定在視窗上，不隨頁面滾動 */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6); /* 半透明黑色背景 */
+    display: flex; /* 使用 Flexbox 讓內容垂直和水平居中 */
+    justify-content: center;
+    align-items: center;
+    z-index: 1000; /* 確保在最上層 */
+    /* display: none;  由 JS 控制顯示/隱藏 */
+}
+
+/* 3. 懸浮層中的內容面板 */
+.focus-content {
+    display: flex;
+    gap: 25px; /* 圖片和表單之間的間距 */
+    background: white;
+    padding: 25px;
+    border-radius: 8px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.4);
+    max-width: 90vw;   /* 最大寬度不超過視窗寬度的90% */
+    max-height: 90vh;  /* 最大高度不超過視窗高度的90% */
+}
+
+/* 4. 聚焦圖片的容器與樣式 */
+.focus-image-container {
+    flex-shrink: 0; /* 防止圖片容器被壓縮 */
+}
+
+#focusImage {
+    max-width: 60vw;   /* 圖片最大寬度為視窗的60% */
+    max-height: 85vh;  /* 圖片最大高度為視窗的85% */
+    object-fit: contain; /* 確保圖片完整顯示，不被裁切 */
+    border-radius: 4px;
+}
+
+/* 5. 右側標註表單的容器與關閉按鈕 */
+.focus-form-container {
+    position: relative; /* 為了絕對定位關閉按鈕 */
+    display: flex;
+    flex-direction: column;
+    width: 300px; /* 給表單一個固定寬度 */
+    color: #333; /* 確保文字顏色正常 */
+}
+
+.close-focus-btn {
+    position: absolute;
+    top: -15px;
+    right: -10px;
+    font-size: 2.2em; /* 加大叉叉，更容易點擊 */
+    font-weight: bold;
+    color: #888;
+    cursor: pointer;
+    line-height: 1;
+    transition: color 0.2s;
+}
+.close-focus-btn:hover {
+    color: #000;
+}
+
+/* 6. 標註表單內部樣式 */
+.focus-form-container h3 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: #2c3e50;
+}
+
+.focus-form-container .form-group {
+    margin-bottom: 20px;
+}
+.focus-form-container label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #555;
+}
+
+/* 7. 星星評分樣式 (非常重要) */
+.rating-stars {
+    display: inline-block;
+    direction: rtl; /* 關鍵：讓星星從右到左排列，實現懸停效果 */
+}
+.rating-stars input[type="radio"] {
+    display: none; /* 隱藏原始的 radio 按鈕 */
+}
+.rating-stars label {
+    font-size: 2.2em;
+    color: #ddd; /* 未選中時的顏色 */
+    cursor: pointer;
+    transition: color 0.2s;
+}
+/* 關鍵：當 radio 被選中時，其後面的所有 label (星星) 都會變色 */
+.rating-stars input[type="radio"]:checked ~ label,
+/* 關鍵：當滑鼠懸停在某個 label 上時，它自己和它後面的所有 label 都會變色 */
+.rating-stars label:hover,
+.rating-stars label:hover ~ label {
+    color: #f5b301; /* 金色 */
+}
+
+/* 8. 下拉選單和儲存按鈕 */
+#correctBehavior {
+    width: 100%;
+    padding: 10px;
+    font-size: 1em;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+#saveTagButton {
+    background-color: #28a745; /* 綠色，表示確認、儲存 */
+    color: white;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1.1em;
+    font-weight: bold;
+    margin-top: auto; /* 關鍵：將按鈕推到容器底部 */
+    transition: background-color 0.2s;
+}
+#saveTagButton:hover {
+    background-color: #218838;
+}
+
+/* 9. 可標註圖片的樣式 */
+.taggable-image-wrapper {
+    position: relative;
+    border: 3px solid transparent; /* 預留邊框位置，防止懸停時跳動 */
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    border-radius: 4px; /* 給外層容器也加圓角 */
+    overflow: hidden; /* 確保圖片不會超出圓角範圍 */
+}
+.taggable-image-wrapper:hover {
+    transform: scale(1.05);
+    border-color: #007bff; /* 藍色邊框提示可點擊 */
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+/* 10. 圖片已被標註後的樣式 */
+.taggable-image-wrapper.tagged {
+    border-color: #28a745; /* 綠色邊框表示已完成 */
+    cursor: not-allowed; /* 鼠標變為禁止符號 */
+}
+.taggable-image-wrapper.tagged:hover {
+    transform: none; /* 標註後移除懸停放大效果 */
+    box-shadow: none;
+}
+
+/* 11. 「已校準」的提示標籤 */
+.taggable-image-wrapper.tagged::after {
+    content: '✔ 已校準';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: rgba(40, 167, 69, 0.85); /* 半透明綠色背景 */
+    color: white;
+    font-size: 0.8em;
+    font-weight: bold;
+    text-align: center;
+    padding: 4px 0;
+}
+
+.taggable-image-wrapper img {
+    width: 100%;
+    display: block; /* 移除圖片底部的微小空隙 */
+}
+
+/* 12. 儀表板底部的操作區 (匯出按鈕) */
+.dashboard-actions {
+    text-align: center;
+    padding: 20px;
+    margin-top: 20px;
+    border-top: 1px solid #eee;
+    background-color: #f8f9fa; /* 給一個淺色背景 */
+}
+
+#exportButton {
+    background-color: #007bff;
+    color: white;
+    padding: 12px 25px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1.1em;
+    font-weight: bold;
+    transition: background-color 0.3s, transform 0.1s;
+}
+#exportButton:hover:not(:disabled) {
+    background-color: #0056b3;
+}
+#exportButton:active:not(:disabled) {
+    transform: scale(0.98); /* 點擊時的下沉效果 */
+}
+#exportButton:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+/* ==========================================================================
+   【修改】網格與標籤樣式 (Grid & Label Styles)
+   ========================================================================== */
+
+/* 1. 跨學生總覽的圖片網格佈局 (核心修改) */
+#crossStudentImageContainer .image-grid {
+    display: grid;
+    /* 在標準螢幕上，創建 5 個等寬的欄位 */
+    grid-template-columns: repeat(5, 1fr);
+    gap: 15px; /* 圖片之間的間距 */
+}
+
+/* 2. 可標註圖片的容器樣式 */
+.taggable-image-wrapper {
+    position: relative;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    border-radius: 6px;
+    overflow: hidden; /* 確保標籤和圖片都在圓角範圍內 */
+    background-color: #f0f2f5; /* 給一個淺灰色背景 */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.taggable-image-wrapper:hover {
+    transform: scale(1.03); /* 懸停時稍微放大 */
+    border-color: #007bff;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* 3. 圖片本身的樣式 */
+.taggable-image-wrapper img {
+    width: 100%;
+    display: block;
+    aspect-ratio: 4 / 3; /* 固定圖片為 4:3 比例，讓網格更整齊 */
+    object-fit: cover;   /* 圖片會被裁切以填滿容器，但不會變形 */
+}
+
+/* 4. 【新增】學生姓名標籤的美化樣式 */
+.image-grid-label {
+    position: absolute; /* 相對於 .taggable-image-wrapper 定位 */
+    top: 8px;
+    left: 8px;
+    background-color: rgba(0, 0, 0, 0.6); /* 半透明黑色背景 */
+    color: white;
+    padding: 3px 10px; /* 內邊距 */
+    border-radius: 12px; /* 膠囊形狀 */
+    font-size: 0.75em;  /* 較小的字體 */
+    font-weight: bold;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    /* 防止標籤文字過長時換行 */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: calc(100% - 16px); /* 確保標籤不會超出圖片寬度 */
+}
+
+/* 5. 圖片已被標註後的樣式 (保持不變) */
+.taggable-image-wrapper.tagged {
+    border-color: #28a745;
+    cursor: not-allowed;
+}
+.taggable-image-wrapper.tagged:hover {
+    transform: none;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.taggable-image-wrapper.tagged::after {
+    content: '✔ 已校準';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: rgba(40, 167, 69, 0.85);
+    color: white;
+    font-size: 0.8em;
+    font-weight: bold;
+    text-align: center;
+    padding: 4px 0;
+}
+
+/* 6. 【新增】響應式設計：在小螢幕上調整網格欄數 */
+@media (max-width: 1200px) {
+    #crossStudentImageContainer .image-grid {
+        grid-template-columns: repeat(4, 1fr); /* 平板或較小桌面：4欄 */
+    }
+}
+@media (max-width: 768px) {
+    #crossStudentImageContainer .image-grid {
+        grid-template-columns: repeat(3, 1fr); /* 手機橫向：3欄 */
+    }
+}
+@media (max-width: 480px) {
+    #crossStudentImageContainer .image-grid {
+        grid-template-columns: repeat(2, 1fr); /* 手機縱向：2欄 */
+    }
+}
+
+
+.load-more-button {
+    display: block;
+    width: 100%;
+    padding: 12px;
+    margin-top: 20px;
+    font-size: 1em;
+    font-weight: bold;
+    color: #007bff;
+    background-color: #f0f8ff;
+    border: 2px solid #007bff;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+
+.load-more-button:hover {
+    background-color: #007bff;
+    color: white;
+}
+
+/* ==========================================================================
+   【新增】行為影像瀏覽 (單一學生) 的圖片網格樣式
+   ========================================================================== */
+
+/* 1. 針對「行為影像瀏覽」頁簽內的圖片網格容器 */
+#imageExplorerContainer .image-grid {
+    display: grid;
+    /* 【核心修改】創建 5 個等寬的欄位 */
+    grid-template-columns: repeat(5, 1fr); 
+    /* 圖片之間的間距 */
+    gap: 10px; 
+    /* 給網格上下一些留白，避免緊貼標題 */
+    padding: 15px 0; 
+}
+
+/* 2. 網格中圖片本身的樣式 (確保大小和比例一致) */
+#imageExplorerContainer .taggable-image-wrapper img {
+    width: 100%;         /* 圖片寬度填滿其容器 */
+    display: block;      /* 移除圖片底部可能存在的空隙 */
+    /* 【核心修改】固定長寬比為 4:3，讓網格看起來非常整齊 */
+    aspect-ratio: 4 / 3; 
+    /* 【核心修改】圖片會自動被裁切以填滿 4:3 的容器，但不會變形 */
+    object-fit: cover;   
+}
+
+/* 3. 【優化】響應式調整：在螢幕變小時，自動減少欄數，避免擠壓 */
+@media (max-width: 1200px) {
+    #imageExplorerContainer .image-grid {
+        grid-template-columns: repeat(4, 1fr); /* 平板或較小桌面：4欄 */
+    }
+}
+
+@media (max-width: 768px) {
+    #imageExplorerContainer .image-grid {
+        grid-template-columns: repeat(3, 1fr); /* 手機橫向：3欄 */
+    }
+}
+
+@media (max-width: 480px) {
+    #imageExplorerContainer .image-grid {
+        grid-template-columns: repeat(2, 1fr); /* 手機縱向：2欄 */
+    }
+}
+
+.behavior-item.has-images .behavior-title.clickable {
+    cursor: pointer;
+    font-weight: 600;
+    color: #0056b3;
+    position: relative;
+    padding-left: 20px; /* 為圖標預留空間 */
+}
+/* 使用偽元素創建一個可點擊的指示符號 (三角箭頭) */
+.behavior-item.has-images .behavior-title.clickable::before {
+    content: '▶';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%) rotate(0deg);
+    font-size: 0.8em;
+    transition: transform 0.2s ease-in-out;
+}
+
+.behavior-item.has-images .behavior-title.clickable:hover {
+    background-color: #e2e6ea; /* 與舊版懸停樣式保持一致 */
+}
+
+/* 當圖片網格展開時，讓三角箭頭旋轉 */
+.behavior-item .image-grid[style*="display: grid"] + .behavior-title::before, /* 這種選擇器可能不穩定 */
+/* 更好的方式是透過 JS 添加一個 class */
+.behavior-item .behavior-title.is-open::before {
+    transform: translateY(-50%) rotate(90deg);
+}
+
+.behavior-item .image-grid {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #eee;
+    /* 這裡的網格佈局會繼承 #crossStudentImageContainer .image-grid 的樣式 */
+    /* 如果您希望它有不同的欄數，可以在這裡覆寫 */
+    /* 例如：grid-template-columns: repeat(4, 1fr); */
+}

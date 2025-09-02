@@ -62,21 +62,60 @@
 </div>
 
 <!-- ****** 彈出視窗 (Modal) ****** -->
-<div id="imageModal" class="modal">
+<!-- <div id="imageModal" class="modal">
     <div class="modal-content">
         <span class="close-button">×</span>
         <h3 id="modalTitle">行為影像預覽</h3>
         <div id="modalImageGrid">
-            <!-- 圖片將由JS動態加載於此 -->
+
         </div>
     </div>
-</div>
+</div> -->
 
 <div id="crossStudentImageTab" class="tab-content" style="display: none;">
     <h3>跨學生行為總覽</h3>
-    <p>選擇日期後，此處將列出該日所有課堂行為。點擊具體行為，即可瀏覽當天所有學生的該行為影像。</p>
-    <div id="crossStudentImageContainer">
+    <p>點擊行為展開影像列表，再點擊單張影像即可進入「聚焦模式」進行評分與重新標註。</p>   
+     <div id="crossStudentImageContainer">
         <!-- 跨學生行為影像瀏覽器將由JS動態生成於此 -->
+    </div>
+</div>
+
+<div class="dashboard-actions">
+        <button id="exportButton" disabled>匯出校準數據 (<span id="tagCount">0</span>)</button>
+    </div>
+</div>
+
+<!-- 【修改點 3】移除舊的 imageModal，改為全新的聚焦標註懸浮層 -->
+<!-- 這不是一個全螢幕的 modal，而是一個更輕量的懸浮層 -->
+<div id="focusTaggingOverlay" class="focus-overlay" style="display: none;">
+    <div class="focus-content">
+        <div class="focus-image-container">
+            <img id="focusImage" src="" alt="聚焦圖片">
+        </div>
+        <div class="focus-form-container">
+            <span class="close-focus-btn">×</span>
+            <h3>校準影像</h3>
+            <p><strong>原辨識行為:</strong> <span id="originalBehavior"></span></p>
+            
+            <div class="form-group">
+                <label>錯誤程度 (1:差異大, 5:幾乎正確):</label>
+                <div id="errorRating" class="rating-stars">
+                    <!-- 星星評分 HTML 結構 -->
+                    <input type="radio" name="rating" id="rate-5" value="5"><label for="rate-5">★</label>
+                    <input type="radio" name="rating" id="rate-4" value="4"><label for="rate-4">★</label>
+                    <input type="radio" name="rating" id="rate-3" value="3"><label for="rate-3">★</label>
+                    <input type="radio" name="rating" id="rate-2" value="2"><label for="rate-2">★</label>
+                    <input type="radio" name="rating" id="rate-1" value="1"><label for="rate-1">★</label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="correctBehavior">請選擇正確的行為分類:</label>
+                <select id="correctBehavior" name="correct_behavior"></select>
+            </div>
+            
+            <button id="saveTagButton">儲存此筆標註</button>
+        </div>
     </div>
 </div>
 

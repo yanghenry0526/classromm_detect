@@ -8,18 +8,24 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import glob
 import re
 import base64 
+import datetime
 
 # --- App Configuration ---
 app = Flask(__name__, instance_relative_config=True)
 app.config['SECRET_KEY'] = os.urandom(24) # 在生產環境中，應使用更安全的固定密鑰管理方式
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+app.config['REMEMBER_COOKIE_DURATION'] = datetime.timedelta(days=1)
+
 app.config['BEHAVIOR_REPORT_FOLDER'] = os.path.join(app.root_path, 'SynologyDrive\json_behavior')
 app.config['STUDENT_WEEK_PHOTO_FOLDER'] = r'C:\Users\User\Desktop\test\student_week_photo'
 app.config['NOTES_REPORT_FOLDER'] = r'C:\Users\User\Desktop\test\note_json'
 app.config['NOTES_BLACKBOARD_FOLDER'] = r'C:\Users\User\Desktop\test\note_blackboard'
 app.config['TRAINING_JSON_FOLDER'] = r'C:\Users\User\Desktop\test\training_json'
 app.config['FEW_SHOT_EXAMPLES_FILENAME'] = 'few_shot_examples.json'
+app.config['TRAINING_JSON_FOLDER'] = r'C:\Users\User\Desktop\test\training_json'
+
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
@@ -657,26 +663,29 @@ def api_log_page_event_beacon():
 @app.route('/api/teacher/all_students_activity_summary')
 @login_required
 def get_all_students_activity_summary():
+    """
+    獲取指定日期的所有學生網站活動摘要和課堂行為報告摘要。
+    此版本嚴格使用報告JSON內部的 'report_generation_time' 作為日期篩選依據。
+    """
+    # --- 步驟 1: 權限檢查與參數獲取 ---
     if current_user.role != 'teacher':
         return jsonify({"error": "權限不足"}), 403
 
+    selected_date_str = request.args.get('date') # e.g., "2025-08-24"
+    if not selected_date_str:
+        return jsonify({"error": "必須提供日期參數"}), 400
+    
     try:
-        # --- 步驟 1: 接收前端傳來的日期參數 ---
-        selected_date_str = request.args.get('date')
-        if not selected_date_str:
-            return jsonify({"error": "必須提供日期參數"}), 400
-        
-        # 學生查詢
+        # --- 步驟 2: 數據初始化 ---
         students = User.query.filter_by(role='student').all()
         summary_data = []
-
         print(f"\n--- [API /api/teacher/all_students_activity_summary] ---")
         print(f"教師 {current_user.username} 請求摘要。學生總數: {len(students)}。篩選日期: {selected_date_str}")
 
-        # --- 步驟 2: 一次性查詢所有學生的網站活動數據 (性能優化) ---
+        # --- 步驟 3: (性能優化) 一次性查詢所有學生的網站活動數據 ---
         all_student_ids = [s.id for s in students]
         
-        # 查詢所有相關的點擊日誌
+        # 查詢點擊日誌 (這部分邏輯與之前相同，保持不變)
         general_clicks_query = db.session.query(
             ClickLog.user_id,
             db.func.count(ClickLog.id)
@@ -685,7 +694,7 @@ def get_all_students_activity_summary():
             ClickLog.event_type == 'click'
         ).group_by(ClickLog.user_id).all()
         
-        # 查詢所有相關的標籤頁停留時間
+        # 查詢頁籤停留時間 (這部分邏輯與之前相同，保持不變)
         tab_durations_query = db.session.query(
             ClickLog.user_id,
             ClickLog.element_or_page_id,
@@ -695,7 +704,7 @@ def get_all_students_activity_summary():
             ClickLog.event_type.like('tab_view_end%')
         ).group_by(ClickLog.user_id, ClickLog.element_or_page_id).all()
 
-        # 將查詢結果轉換為字典，方便後續查找
+        # 將查詢結果轉換為字典以便快速查找 (這部分邏輯與之前相同，保持不變)
         clicks_by_student = {user_id: count for user_id, count in general_clicks_query}
         time_by_student = {}
         for user_id, page_id, total_seconds in tab_durations_query:
@@ -710,7 +719,7 @@ def get_all_students_activity_summary():
                 }.get(page_id, page_id)
                 time_by_student[user_id][tab_display_name] = format_seconds_to_readable(total_seconds)
 
-        # --- 步驟 3: 遍歷學生，處理報告檔案 ---
+        # --- 步驟 4: 遍歷每一位學生，查找並處理其符合日期的報告 ---
         for student in students:
             print(f"  正在處理學生: {student.username} (ID: {student.id})")
             
@@ -718,100 +727,79 @@ def get_all_students_activity_summary():
             total_general_clicks = clicks_by_student.get(student.id, 0)
             time_spent_on_tabs_formatted = time_by_student.get(student.id, {})
 
-            # 初始化報告摘要，確保即使沒有報告檔案，前端也能收到基本結構
+            # 初始化報告摘要的預設結構
             student_report_summary = {
                 "latest_report_filename": None,
-                "report_date": "無報告",
+                "report_date": "無符合日期的報告",
                 "behavior_statistics": [],
                 "behavior_to_images_index": {},
-                "top_behavior": "N/A",
-                "top_behavior_percent": 0,
-                "non_task_percent": 0,
             }
 
             student_report_folder = os.path.join(app.config['BEHAVIOR_REPORT_FOLDER'], student.username)
             
             if os.path.isdir(student_report_folder):
-                # 【核心修改】不再使用日期篩選 glob，而是獲取該學生的所有報告進行內部檢查
+                # 獲取該學生的所有報告檔案，進行內部日期檢查
                 all_files = sorted(glob.glob(os.path.join(student_report_folder, f"student_{student.username}_behavior_report_*.json")), reverse=True)
                 
-                # 【新增邏輯】遍歷所有檔案，找到日期匹配的那一個
                 found_report_path = None
+                # 【【【 核心修正邏輯開始 】】】
                 for report_path in all_files:
                     try:
-                        # --- START OF MODIFICATION ---
+                        with open(report_path, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                        
+                        # 1. 從 JSON 內部讀取 "MM/DD" 格式的日期
+                        internal_time_str = data.get('report_metadata', {}).get('report_generation_time') # e.g., "08/24"
+                        
+                        if not internal_time_str or not isinstance(internal_time_str, str):
+                            continue
+
+                        # 2. 從檔名安全地獲取年份 (因為內部沒有年份)
                         report_filename = os.path.basename(report_path)
                         year_match = re.search(r'_(\d{4})\d{4}_', report_filename)
                         if not year_match:
                             continue
-                        report_year = year_match.group(1)
+                        report_year = year_match.group(1) # e.g., "2025"
 
-                        with open(report_path, 'r', encoding='utf-8') as f:
-                            data = json.load(f)
-                        
-                        internal_time_str = data.get('report_metadata', {}).get('report_generation_time')
-                        if internal_time_str and isinstance(internal_time_str, str):
-                            parts = re.split(r'[/]', internal_time_str)
-                            if len(parts) == 2:
-                                month, day = parts[0].zfill(2), parts[1].zfill(2)
-                                internal_full_date = f"{report_year}-{month}-{day}"
-                                
-                                if internal_full_date == selected_date_str:
-                                    found_report_path = report_path
-                                    break
-                        # --- END OF MODIFICATION ---
-                    except Exception as e:
-                        print(f"    警告: 處理學生 {student.username} 的報告 {report_filename} 時出錯: {e}")
+                        # 3. 組合出完整的內部日期 "YYYY-MM-DD"
+                        parts = re.split(r'[/]', internal_time_str)
+                        if len(parts) == 2:
+                            month, day = parts[0].zfill(2), parts[1].zfill(2)
+                            internal_full_date = f"{report_year}-{month}-{day}" # e.g., "2025-08-24"
+                            
+                            # 4. 與前端選擇的日期進行比對
+                            if internal_full_date == selected_date_str:
+                                found_report_path = report_path
+                                break # 找到第一個匹配的就跳出迴圈 (因為檔案已按日期排序)
+                    except (json.JSONDecodeError, KeyError, IndexError) as e:
+                        print(f"    警告: 處理學生 {student.username} 的報告 {os.path.basename(report_path)} 時出錯: {e}")
                         continue
+                # 【【【 核心修正邏輯結束 】】】
 
+                # 如果找到了符合日期的報告，則解析其內容
                 if found_report_path:
                     print(f"    找到匹配日期的報告: {os.path.basename(found_report_path)}")
                     
                     try:
-                        # 讀取找到的報告檔案內容
                         with open(found_report_path, 'r', encoding='utf-8') as f:
                             report_data = json.load(f)
                         
                         overall_summary = report_data.get("overall_summary", {})
                         
-                        # 填充報告摘要資訊
+                        # 使用報告數據填充摘要資訊
                         student_report_summary["latest_report_filename"] = os.path.basename(found_report_path)
-                        student_report_summary["report_date"] = selected_date_str # 直接使用前端傳來的日期作為報告日期
-
-                        behavior_stats = overall_summary.get("behavior_statistics", [])
-                        student_report_summary["behavior_statistics"] = behavior_stats
-
-                        # 計算並填充其他摘要欄位
-                        if behavior_stats:
-                            top_behavior = behavior_stats[0]
-                            student_report_summary["top_behavior"] = top_behavior.get("behavior_category", "N/A")
-                            student_report_summary["top_behavior_percent"] = top_behavior.get("percentage", 0)
-                            
-                            non_task_behaviors = {
-                                "趴睡",
-                                "玩弄手部/文具",
-                                "觸摸臉部",
-                                "觸摸頭髮",
-                                "目視他處",
-                                "目視同學"
-                            }
-                            non_task_total_percent = sum(
-                                item.get("percentage", 0) 
-                                for item in behavior_stats 
-                                if item.get("behavior_category") in non_task_behaviors
-                            )
-                            student_report_summary["non_task_percent"] = round(non_task_total_percent, 1)
-
+                        student_report_summary["report_date"] = selected_date_str # 使用前端傳來的日期作為報告日期
+                        student_report_summary["behavior_statistics"] = overall_summary.get("behavior_statistics", [])
                         student_report_summary["behavior_to_images_index"] = overall_summary.get("behavior_to_images_index", {})
 
                     except Exception as e:
-                        print(f"    錯誤: 讀取或解析學生 {student.username} 的報告 {os.path.basename(found_report_path)} 時出錯: {e}")
+                        print(f"    錯誤: 讀取或解析報告 {os.path.basename(found_report_path)} 時出錯: {e}")
                 else:
                     print(f"    警告: 學生 {student.username} 在日期 '{selected_date_str}' 沒有找到報告檔案。")
             else:
                 print(f"    警告: 未找到學生 {student.username} 的報告資料夾: {student_report_folder}")
 
-            # --- 步驟 5: 組合最終數據 ---
+            # --- 步驟 5: 組合該學生的最終數據 ---
             summary_data.append({
                 "student_id": student.id,
                 "student_name": student.username,
@@ -852,37 +840,112 @@ def get_all_available_dates(report_root_folder):
     
     return sorted(list(unique_dates), reverse=True)
 
+# @app.route('/api/teacher/available_report_dates')
+# @login_required
+# def get_available_report_dates():
+#     if current_user.role != 'teacher':
+#         return jsonify({"error": "權限不足"}), 403
+
+#     report_root_folder = app.config['BEHAVIOR_REPORT_FOLDER']
+#     unique_dates = set()
+
+#     if not os.path.isdir(report_root_folder):
+#         return jsonify([])
+
+#     try:
+#         for student_folder_name in os.listdir(report_root_folder):
+#             full_student_path = os.path.join(report_root_folder, student_folder_name)
+#             if os.path.isdir(full_student_path):
+#                 for report_filename in os.listdir(full_student_path):
+#                     if report_filename.endswith(".json"):
+#                         report_path = os.path.join(full_student_path, report_filename)
+#                         try:
+#                             # 步驟 1: 安全地從檔名獲取年份
+#                             year_match = re.search(r'_(\d{4})\d{4}_', report_filename)
+#                             if not year_match:
+#                                 print(f"警告：檔案 {report_filename} 名稱格式不符，已跳過。")
+#                                 continue
+#                             report_year = year_match.group(1)
+
+#                             with open(report_path, 'r', encoding='utf-8') as f:
+#                                 data = json.load(f)
+                            
+#                             # 步驟 2: 安全地從 JSON 內部獲取月日
+#                             metadata = data.get('report_metadata', {})
+#                             report_time_str = metadata.get('report_generation_time')
+                            
+#                             if not report_time_str or not isinstance(report_time_str, str):
+#                                 print(f"警告：檔案 {report_filename} 內部缺少或格式錯誤的 report_generation_time，已跳過。")
+#                                 continue
+
+#                             # 步驟 3: 安全地解析月日並組合
+#                             parts = re.split(r'[/]', report_time_str)
+#                             if len(parts) == 2:
+#                                 month = parts[0].zfill(2)
+#                                 day = parts[1].zfill(2)
+#                                 full_date = f"{report_year}-{month}-{day}"
+#                                 unique_dates.add(full_date)
+#                             else:
+#                                 print(f"警告：檔案 {report_filename} 內部日期格式 '{report_time_str}' 不符，已跳過。")
+#                                 continue
+
+#                         # 步驟 4: 捕獲所有其他未預料的錯誤
+#                         except Exception as e:
+#                             print(f"警告：處理檔案 {report_filename} 時發生未預期錯誤: {e}")
+#                             continue
+                            
+#     except Exception as e:
+#         print(f"錯誤：掃描報告日期時出錯: {e}")
+#         return jsonify({"error": "掃描報告日期時出錯"}), 500
+    
+#     sorted_dates = sorted(list(unique_dates), reverse=True)
+#     return jsonify(sorted_dates)
 @app.route('/api/teacher/available_report_dates')
 @login_required
 def get_available_report_dates():
+    """
+    獲取所有報告中出現過的、不重複的日期列表。
+    此版本嚴格使用 "檔名中的年份" + "JSON內部的月日" 來生成日期，
+    這是最權威的日期來源。
+    """
+    # --- 步驟 1: 權限檢查 ---
     if current_user.role != 'teacher':
         return jsonify({"error": "權限不足"}), 403
 
+    # --- 步驟 2: 初始化 ---
     report_root_folder = app.config['BEHAVIOR_REPORT_FOLDER']
-    unique_dates = set()
+    unique_dates = set() # 使用集合來自動處理重複日期
 
     if not os.path.isdir(report_root_folder):
+        print(f"警告：報告根目錄未找到: {report_root_folder}")
         return jsonify([])
 
     try:
+        # --- 步驟 3: 遍歷所有學生資料夾和報告檔案 ---
         for student_folder_name in os.listdir(report_root_folder):
             full_student_path = os.path.join(report_root_folder, student_folder_name)
             if os.path.isdir(full_student_path):
+                
                 for report_filename in os.listdir(full_student_path):
+                    # 只處理 JSON 檔案
                     if report_filename.endswith(".json"):
                         report_path = os.path.join(full_student_path, report_filename)
+                        
                         try:
-                            # 步驟 1: 安全地從檔名獲取年份
+                            # 【【【 核心修正邏輯開始 】】】
+                            
+                            # A. 從檔名安全地獲取年份 (YYYY)
                             year_match = re.search(r'_(\d{4})\d{4}_', report_filename)
                             if not year_match:
-                                print(f"警告：檔案 {report_filename} 名稱格式不符，已跳過。")
+                                # 如果檔名格式不符，打印警告並跳過此檔案
+                                print(f"警告：檔案 {report_filename} 名稱格式不符，無法提取年份，已跳過。")
                                 continue
                             report_year = year_match.group(1)
 
+                            # B. 打開檔案，只為了讀取內部的 report_generation_time (MM/DD)
                             with open(report_path, 'r', encoding='utf-8') as f:
                                 data = json.load(f)
                             
-                            # 步驟 2: 安全地從 JSON 內部獲取月日
                             metadata = data.get('report_metadata', {})
                             report_time_str = metadata.get('report_generation_time')
                             
@@ -890,70 +953,95 @@ def get_available_report_dates():
                                 print(f"警告：檔案 {report_filename} 內部缺少或格式錯誤的 report_generation_time，已跳過。")
                                 continue
 
-                            # 步驟 3: 安全地解析月日並組合
+                            # C. 安全地解析月日並與年份組合
                             parts = re.split(r'[/]', report_time_str)
                             if len(parts) == 2:
-                                month = parts[0].zfill(2)
+                                month = parts[0].zfill(2) # 補零，例如 "8" -> "08"
                                 day = parts[1].zfill(2)
-                                full_date = f"{report_year}-{month}-{day}"
+                                full_date = f"{report_year}-{month}-{day}" # 組合成 "YYYY-MM-DD"
                                 unique_dates.add(full_date)
                             else:
-                                print(f"警告：檔案 {report_filename} 內部日期格式 '{report_time_str}' 不符，已跳過。")
+                                print(f"警告：檔案 {report_filename} 內部日期格式 '{report_time_str}' 不符合 'MM/DD' 格式，已跳過。")
                                 continue
 
-                        # 步驟 4: 捕獲所有其他未預料的錯誤
+                            # 【【【 核心修正邏輯結束 】】】
+
+                        # 捕獲處理單一檔案時可能發生的所有錯誤，避免中斷整個流程
                         except Exception as e:
                             print(f"警告：處理檔案 {report_filename} 時發生未預期錯誤: {e}")
                             continue
                             
     except Exception as e:
-        print(f"錯誤：掃描報告日期時出錯: {e}")
-        return jsonify({"error": "掃描報告日期時出錯"}), 500
+        print(f"錯誤：掃描報告根目錄時發生嚴重錯誤: {e}")
+        return jsonify({"error": "掃描報告日期時發生伺服器錯誤"}), 500
     
+    # --- 步驟 4: 對結果進行排序並以 JSON 格式返回 ---
     sorted_dates = sorted(list(unique_dates), reverse=True)
+    print(f"--- [API /api/teacher/available_report_dates] ---")
+    print(f"成功掃描並找到 {len(sorted_dates)} 個不重複的報告日期。")
     return jsonify(sorted_dates)
-
 
 @app.route('/api/teacher/behavior_summary_by_date')
 @login_required
 def get_behavior_summary_by_date():
+    """
+    獲取指定日期的、跨所有學生的行為影像總覽。
+    此版本嚴格使用 "檔名中的年份" + "JSON內部的月日" 來篩選符合日期的報告。
+    """
+    # --- 步驟 1: 權限檢查與參數獲取 ---
     if current_user.role != 'teacher':
         return jsonify({"error": "權限不足"}), 403
 
-    selected_date_str = request.args.get('date')
+    selected_date_str = request.args.get('date') # e.g., "2025-08-24"
     if not selected_date_str:
         return jsonify({"error": "必須提供日期參數"}), 400
 
+    # --- 步驟 2: 初始化 ---
     report_root_folder = app.config['BEHAVIOR_REPORT_FOLDER']
     aggregated_behaviors = {}
+    print(f"\n--- [API /api/teacher/behavior_summary_by_date] ---")
+    print(f"請求跨學生行為總覽，篩選日期: {selected_date_str}")
+
 
     try:
+        # --- 步驟 3: 遍歷所有學生資料夾和報告檔案 ---
         for student_folder_name in os.listdir(report_root_folder):
             full_student_path = os.path.join(report_root_folder, student_folder_name)
             if os.path.isdir(full_student_path):
+                
+                # 使用 glob 獲取該學生的所有報告檔案
                 all_files = glob.glob(os.path.join(full_student_path, f"student_*_behavior_report_*.json"))
 
                 for report_path in all_files:
                     try:
-                        # --- START OF MODIFICATION ---
+                        # 【【【 核心修正邏輯開始 (與其他 API 的邏輯完全相同) 】】】
                         report_filename = os.path.basename(report_path)
+                        
+                        # A. 從檔名安全地獲取年份 (YYYY)
                         year_match = re.search(r'_(\d{4})\d{4}_', report_filename)
-                        if not year_match: continue
+                        if not year_match: 
+                            continue
                         report_year = year_match.group(1)
 
+                        # B. 打開檔案，讀取內部的 report_generation_time (MM/DD)
                         with open(report_path, 'r', encoding='utf-8') as f:
                             report_data = json.load(f)
                         
                         internal_time_str = report_data.get('report_metadata', {}).get('report_generation_time')
+                        
                         if internal_time_str and isinstance(internal_time_str, str):
+                            # C. 組合出完整的 "YYYY-MM-DD" 日期
                             parts = re.split(r'[/]', internal_time_str)
                             if len(parts) == 2:
                                 month, day = parts[0].zfill(2), parts[1].zfill(2)
                                 internal_full_date = f"{report_year}-{month}-{day}"
                                 
+                                # D. 【關鍵】只有當內部日期匹配時，才處理這個檔案
                                 if internal_full_date == selected_date_str:
                                     summary = report_data.get("overall_summary", {})
                                     image_index = summary.get("behavior_to_images_index", {})
+                                    
+                                    # 將圖片資訊聚合到 aggregated_behaviors 中
                                     for behavior, images in image_index.items():
                                         if behavior not in aggregated_behaviors:
                                             aggregated_behaviors[behavior] = []
@@ -963,12 +1051,17 @@ def get_behavior_summary_by_date():
                                                 "report_filename": report_filename,
                                                 "image_filename": image_file
                                             })
-                        # --- END OF MODIFICATION ---
+                        # 【【【 核心修正邏輯結束 】】】
+
                     except Exception as e:
-                        print(f"警告: 處理報告 {report_filename} 時發生錯誤: {e}")
+                        print(f"警告: 處理報告 {os.path.basename(report_path)} 時發生錯誤: {e}")
                         continue
         
+        # --- 步驟 4: 對結果進行排序並以 JSON 格式返回 ---
+        # 按行為類別的名稱排序，讓前端顯示更穩定
         sorted_aggregated_behaviors = dict(sorted(aggregated_behaviors.items()))
+        
+        print(f"--- [API /api/teacher/behavior_summary_by_date] 處理完成 ---")
         return jsonify(sorted_aggregated_behaviors)
 
     except Exception as e:
@@ -1022,6 +1115,161 @@ def api_get_workbook_report_for_date():
         print(f"為學生 {current_user.username} 獲取日期 {report_date_str} 的練習冊時出錯: {e}")
         return jsonify({"error": "伺服器在獲取練習冊時發生錯誤"}), 500
 
+@app.route('/api/teacher/export_calibrations', methods=['POST'])
+@login_required
+def api_export_calibrations():
+    if current_user.role != 'teacher':
+        return jsonify({"error": "權限不足"}), 403
+
+    # 獲取本次會話中新增的標註數據
+    new_tagged_data = request.get_json()
+    if not new_tagged_data or not isinstance(new_tagged_data, list):
+        return jsonify({"success": False, "message": "無效的數據格式"}), 400
+
+    try:
+        # 定義固定的檔案路徑
+        target_folder = app.config['TRAINING_JSON_FOLDER']
+        if not os.path.exists(target_folder):
+            os.makedirs(target_folder)
+        
+        file_path = os.path.join(target_folder, 'calibration_export.json')
+
+        # 讀取已有的數據
+        existing_data = []
+        if os.path.isfile(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                # 處理空檔案的情況
+                content = f.read()
+                if content:
+                    existing_data = json.loads(content)
+        
+        # 將新數據附加到舊數據後面
+        updated_data = existing_data + new_tagged_data
+        
+        # 【可選但推薦】去重，防止意外的重複數據
+        # 我們使用 image_path 作為唯一標識符
+        final_data_dict = {item['image_path']: item for item in updated_data}
+        final_data_list = list(final_data_dict.values())
+
+
+        # 將合併並去重後的完整數據寫回同一個檔案
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(final_data_list, f, ensure_ascii=False, indent=4)
+        
+        print(f"成功更新標註數據: {file_path}")
+        return jsonify({
+            "success": True, 
+            "message": f"成功將 {len(new_tagged_data)} 筆新標註寫入資料庫。",
+            "total_records": len(final_data_list)
+        }), 200
+
+    except Exception as e:
+        print(f"更新標註檔案時發生嚴重錯誤: {e}")
+        return jsonify({"success": False, "message": "伺服器內部錯誤"}), 500
+
+# --- 【新增】這個全新的 API，用於在頁面載入時讀取歷史標註 ---
+@app.route('/api/teacher/get_calibrations')
+@login_required
+def api_get_calibrations():
+    if current_user.role != 'teacher':
+        return jsonify({"error": "權限不足"}), 403
+
+    try:
+        file_path = os.path.join(app.config['TRAINING_JSON_FOLDER'], 'calibration_export.json')
+
+        if os.path.isfile(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                if content:
+                    data = json.loads(content)
+                    return jsonify(data)
+                else:
+                    return jsonify([]) # 如果檔案是空的，返回空列表
+        else:
+            return jsonify([]) # 如果檔案不存在，返回空列表
+            
+    except Exception as e:
+        print(f"讀取標註檔案時發生錯誤: {e}")
+        return jsonify({"error": "讀取標註檔案時出錯"}), 500
+
+@app.route('/api/teacher/get_image_context')
+@login_required
+def api_get_image_context():
+    if current_user.role != 'teacher':
+        return jsonify({"error": "權限不足"}), 403
+
+    report_filename = request.args.get('report_file')
+    image_filename = request.args.get('image_file')
+
+    if not report_filename or not image_filename:
+        return jsonify({"error": "缺少參數"}), 400
+        
+    try:
+        student_name_match = re.search(r'student_([^_]+)_behavior_report', report_filename)
+        if not student_name_match:
+            return jsonify({"error": "無法解析學生姓名"}), 400
+        student_name = student_name_match.group(1)
+        
+        report_path = os.path.join(app.config['BEHAVIOR_REPORT_FOLDER'], student_name, report_filename)
+        if not os.path.isfile(report_path):
+            return jsonify({"error": "報告檔案未找到"}), 404
+
+        with open(report_path, 'r', encoding='utf-8') as f:
+            report_data = json.load(f)
+
+        # 預設值
+        context = {
+            "teacher_position": "未知",
+            "classroom_subject": "未知",
+            "seating_position": "未知",
+            "original_ai_reasoning": "未找到",
+            "original_ai_confidence": 0.0,
+            "batch_context": None,
+            "ai_model_version": None,
+            "student_number": "unknown", # 【新增】預設值
+            "report_date_internal": "unknown" # 【新增】預設值
+        }
+
+        # 1. 從 metadata 提取
+        metadata = report_data.get("report_metadata", {})
+        context["classroom_subject"] = metadata.get("student_image_source_folder", "未知")
+        context["seating_position"] = metadata.get("classroom_context", {}).get("student_position", "未知")
+        
+        # 【【【 關鍵修改開始 】】】
+        # 新增這兩行，從 JSON 的 metadata 中讀取學生座號和內部報告時間
+        context["student_number"] = metadata.get("student_number", "unknown")
+        context["report_date_internal"] = metadata.get("report_generation_time", "unknown") # 例如 "08/24"
+        # 【【【 關鍵修改結束 】】】
+        
+        context["ai_model_version"] = {
+            "vision": metadata.get("analysis_settings", {}).get("vision_model", "未知"),
+            "text": metadata.get("analysis_settings", {}).get("text_model", "未知")
+        }
+
+        # 2. 從 detailed_sequence_analysis 遍歷查找 (這部分不變)
+        for batch in report_data.get("detailed_sequence_analysis", []):
+            if image_filename in batch.get("image_filenames_in_batch", []):
+                context["teacher_position"] = batch.get("matched_teacher_position_text", "未知")
+                
+                for highlight in batch.get("analysis", {}).get("per_image_highlights", []):
+                    try:
+                        img_index = highlight.get("image_index_in_sequence")
+                        if img_index is not None and len(batch["image_filenames_in_batch"]) > img_index and batch["image_filenames_in_batch"][img_index] == image_filename:
+                            context["original_ai_reasoning"] = highlight.get("context_description", "未找到")
+                            context["original_ai_confidence"] = highlight.get("confidence", 0.0)
+                            context["batch_context"] = {
+                                "batch_index": batch.get("batch_index", -1),
+                                "image_index_in_batch": img_index
+                            }
+                            return jsonify(context)
+                    except IndexError:
+                        continue
+        
+        return jsonify(context)
+
+    except Exception as e:
+        print(f"獲取圖片上下文時出錯: {e}")
+        return jsonify({"error": "伺服器內部錯誤"}), 500
 
 if __name__ == '__main__':
     # 確保 instance 和 json_behavior 文件夾存在
