@@ -16,7 +16,7 @@ app.config['SECRET_KEY'] = os.urandom(24) # 在生產環境中，應使用更安
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-app.config['REMEMBER_COOKIE_DURATION'] = datetime.timedelta(days=1)
+app.config['REMEMBER_COOKIE_DURATION'] = datetime.timedelta(days=30)
 
 app.config['BEHAVIOR_REPORT_FOLDER'] = os.path.join(app.root_path, 'SynologyDrive\json_behavior')
 app.config['STUDENT_WEEK_PHOTO_FOLDER'] = r'C:\Users\User\Desktop\test\student_week_photo'
@@ -24,7 +24,6 @@ app.config['NOTES_REPORT_FOLDER'] = r'C:\Users\User\Desktop\test\note_json'
 app.config['NOTES_BLACKBOARD_FOLDER'] = r'C:\Users\User\Desktop\test\note_blackboard'
 app.config['TRAINING_JSON_FOLDER'] = r'C:\Users\User\Desktop\test\training_json'
 app.config['FEW_SHOT_EXAMPLES_FILENAME'] = 'few_shot_examples.json'
-app.config['TRAINING_JSON_FOLDER'] = r'C:\Users\User\Desktop\test\training_json'
 
 
 db = SQLAlchemy(app)
@@ -32,6 +31,16 @@ login_manager = LoginManager(app)
 login_manager.login_view = 'login_page'
 login_manager.login_message = "請先登入以訪問此頁面。"
 login_manager.login_message_category = "info"
+
+@login_manager.unauthorized_handler
+def unauthorized():
+    # 如果請求是 AJAX/Fetch 請求 (通常會帶有 X-Requested-With header)
+    # 或者請求的路徑是 API，則返回 JSON 錯誤
+    if request.path.startswith('/api/') or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify(error="使用者未登入或 Session 已過期，請重新登入。"), 401
+    
+    # 對於一般的頁面瀏覽，則維持原本的重新導向到登入頁
+    return redirect(url_for('login_page'))
 
 # --- Database Models ---
 class User(UserMixin, db.Model):
@@ -1270,6 +1279,48 @@ def api_get_image_context():
     except Exception as e:
         print(f"獲取圖片上下文時出錯: {e}")
         return jsonify({"error": "伺服器內部錯誤"}), 500
+
+@app.route('/api/teacher/get_comprehensive_report_by_date')
+@login_required
+def api_get_comprehensive_report_by_date():
+    """
+    根據日期獲取由 teacher_report_generator.py 生成的課堂綜合報告。
+    """
+    if current_user.role != 'teacher':
+        return jsonify({"error": "權限不足"}), 403
+
+    selected_date_str = request.args.get('date') # e.g., "2025-08-17"
+    if not selected_date_str:
+        return jsonify({"error": "必須提供日期參數"}), 400
+
+    try:
+        # 將 "2025-08-17" 轉換為 "0817" 以匹配檔名
+        date_obj = datetime.datetime.strptime(selected_date_str, '%Y-%m-%d')
+        session_id_for_filename = date_obj.strftime('%m%d')
+
+        teacher_report_folder = os.path.join(app.root_path, 'teacher_json')
+        
+        # 使用 glob 尋找符合日期的報告檔案，例如 teacher_report_0817_*.json
+        file_pattern = os.path.join(teacher_report_folder, f"teacher_report_{session_id_for_filename}_*.json")
+        matching_files = glob.glob(file_pattern)
+
+        if not matching_files:
+            return jsonify({
+                "message": "暫無此日期的課堂綜合洞察報告。",
+                "report_data": None
+            }), 200 # 返回成功，但數據為空
+
+        # 假設每天只有一份報告，取最新的（如果有多份）
+        latest_report_path = max(matching_files, key=os.path.getmtime)
+        
+        with open(latest_report_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        return jsonify({"report_data": data})
+
+    except Exception as e:
+        print(f"獲取課堂綜合報告時發生錯誤: {e}")
+        return jsonify({"error": "伺服器在獲取綜合報告時發生錯誤"}), 500
 
 if __name__ == '__main__':
     # 確保 instance 和 json_behavior 文件夾存在

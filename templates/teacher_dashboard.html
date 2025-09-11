@@ -18,6 +18,7 @@
         <button class="tab-button" onclick="openTeacherTab(event, 'behaviorStatsTab')">課堂行為統計</button>
         <button class="tab-button" onclick="openTeacherTab(event, 'imageExplorerTab')">行為影像瀏覽</button>
         <button class="tab-button" onclick="openTeacherTab(event, 'crossStudentImageTab')">跨學生行為總覽</button>
+        <button class="tab-button" onclick="openTeacherTab(event, 'comprehensiveReportTab')">課堂綜合洞察</button>
     </div>
 
     <!-- ****** 標籤頁內容 ****** -->
@@ -96,6 +97,8 @@
             <span class="close-focus-btn">×</span>
             <h3>校準影像</h3>
             <p><strong>原辨識行為:</strong> <span id="originalBehavior"></span></p>
+            <p><strong>AI判斷理由:</strong> <span id="aiReasoning" class="context-info"></span></p>
+            <p><strong>當時教師位置:</strong> <span id="teacherPosition" class="context-info"></span></p>
             
             <div class="form-group">
                 <label>錯誤程度 (1:差異大, 5:幾乎正確):</label>
@@ -113,16 +116,55 @@
                 <label for="correctBehavior">請選擇正確的行為分類:</label>
                 <select id="correctBehavior" name="correct_behavior"></select>
             </div>
+            <div class="form-group">
+                <label for="calibrationConfidence">請評估您此次校準的信度 (1:不太確定, 5:非常確定):</label>
+                <div class="rating-stars" id="calibrationConfidence">
+                    <!-- 為了避免衝突，name 使用 cal_rating -->
+                    <input type="radio" id="cal-star5" name="cal_rating" value="5"><label for="cal-star5">★</label>
+                    <input type="radio" id="cal-star4" name="cal_rating" value="4"><label for="cal-star4">★</label>
+                    <input type="radio" id="cal-star3" name="cal_rating" value="3"><label for="cal-star3">★</label>
+                    <input type="radio" id="cal-star2" name="cal_rating" value="2"><label for="cal-star2">★</label>
+                    <input type="radio" id="cal-star1" name="cal_rating" value="1"><label for="cal-star1">★</label>
+                </div>
+            </div>
             
             <button id="saveTagButton">儲存此筆標註</button>
         </div>
     </div>
 </div>
 
+
+<div id="comprehensiveReportTab" class="tab-content" style="display: none;">
+        <h3>課堂綜合洞察報告</h3>
+        <p>此報告整合了學生行為數據與教師課堂活動，提供宏觀的教學節奏分析與建議。</p>
+        
+        <!-- 宏觀總結區 -->
+        <div id="reportOverallSummary" class="summary-card">
+            <h4 id="summaryTitle">正在加載總結...</h4>
+            <p id="summaryNarrative"></p>
+            <div id="summaryKeyTakeaways"></div>
+        </div>
+
+        <!-- 視覺化圖表區 -->
+        <div class="chart-container">
+            <h4>學生狀態趨勢圖</h4>
+            <canvas id="behaviorTrendChart"></canvas>
+        </div>
+
+        <!-- 逐段洞察區 -->
+        <div class="timeline-analysis-container">
+            <h4>逐段洞察與建議</h4>
+            <div id="timelineAnalysisCards">
+                <!-- AI分析卡片將由JS動態生成於此 -->
+            </div>
+        </div>
+    </div>
+
 {% endblock %}
 
 {% block scripts %}
-    {# 我們不需要 Chart.js 了，可以移除或保留以備不時之需 #}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
     <script src="{{ url_for('static', filename='js/teacher_dashboard.js') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 {% endblock %}

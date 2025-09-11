@@ -1261,8 +1261,10 @@ ul.flashes li.warning {
 
 /* 7. 星星評分樣式 (非常重要) */
 .rating-stars {
-    display: inline-block;
-    direction: rtl; /* 關鍵：讓星星從右到左排列，實現懸停效果 */
+    display: flex; /* 改為 flex 佈局 */
+    flex-direction: row-reverse; /* 水平反向排列，保持原本的 hover 效果 */
+    justify-content: flex-end; /* 將星星們靠右對齊 (視覺上是靠左) */
+    width: 100%; /* 確保容器有足夠寬度 */
 }
 .rating-stars input[type="radio"] {
     display: none; /* 隱藏原始的 radio 按鈕 */
@@ -1579,4 +1581,164 @@ ul.flashes li.warning {
     /* 這裡的網格佈局會繼承 #crossStudentImageContainer .image-grid 的樣式 */
     /* 如果您希望它有不同的欄數，可以在這裡覆寫 */
     /* 例如：grid-template-columns: repeat(4, 1fr); */
+}
+
+
+/* --- 課堂綜合洞察報告頁籤樣式 --- */
+
+.summary-card {
+    background-color: #f9f9f9;
+    border-left: 5px solid #007bff;
+    padding: 20px;
+    margin-bottom: 25px;
+    border-radius: 0 8px 8px 0;
+}
+
+.summary-card h4 {
+    margin-top: 0;
+    color: #333;
+}
+
+.summary-card p {
+    color: #555;
+    line-height: 1.6;
+}
+
+.summary-card ul {
+    padding-left: 20px;
+    margin-top: 10px;
+}
+
+.summary-card ul li {
+    margin-bottom: 8px;
+    color: #444;
+}
+
+.chart-container {
+    position: relative;
+    height: 400px; /* 給圖表一個固定的高度 */
+    width: 100%;
+    margin-bottom: 30px;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+}
+
+.timeline-analysis-container h4 {
+    border-bottom: 2px solid #eee;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+.timeline-card {
+    background-color: #ffffff;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    transition: box-shadow 0.3s ease;
+}
+
+.timeline-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #f8f9fa;
+    padding: 12px 20px;
+    border-bottom: 1px solid #e9ecef;
+    border-radius: 8px 8px 0 0;
+}
+
+.card-header h5 {
+    margin: 0;
+    color: #495057;
+}
+
+.activity-tag {
+    background-color: #e2e6ea;
+    color: #495057;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    font-weight: 500;
+}
+
+.card-body {
+    padding: 20px;
+}
+
+.card-body p {
+    margin: 0 0 12px 0;
+    line-height: 1.7;
+    color: #6c757d;
+}
+
+.card-body p strong {
+    color: #343a40;
+}
+
+.focus-nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    padding: 16px;
+    font-size: 24px;
+    cursor: pointer;
+    z-index: 1002;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.3s ease;
+}
+
+.focus-nav-btn:hover {
+    background-color: rgba(0, 0, 0, 0.8);
+}
+
+.focus-nav-btn.prev {
+    left: 20px;
+}
+
+.focus-nav-btn.next {
+    right: 20px;
+}
+
+.focus-nav-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* --- 校準模式學生列表的樣式 --- */
+#calibrationStudentListContainer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.calibration-student-btn {
+    padding: 12px 20px;
+    font-size: 1em;
+    cursor: pointer;
+    background-color: #f0f0f0;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    transition: all 0.2s ease-in-out;
+}
+
+.calibration-student-btn:hover {
+    background-color: #e2e2e2;
+    border-color: #ccc;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }

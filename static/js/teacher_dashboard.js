@@ -3,6 +3,7 @@
 // --- 全局變量 ---
 let allStudentData = []; // 用於緩存從API獲取的所有學生數據
 let taggingSessionData = [];
+let behaviorChartInstance = null;
 let taggedImageIdentifiers = new Set();
 const BATCH_SIZE = 50;
 
@@ -549,7 +550,8 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(dates => {
                 dateSelector.innerHTML = '';
                 if (dates && dates.length > 0) {
-                    dateSelector.innerHTML = '<option value="">載入最新報告</option>';
+                    // 將 "載入最新報告" 改為提示性文字
+                    dateSelector.innerHTML = '<option value="">-- 請選擇日期 --</option>';
                     dates.forEach(date => {
                         const option = document.createElement('option');
                         option.value = date;
@@ -557,20 +559,24 @@ document.addEventListener('DOMContentLoaded', function() {
                         dateSelector.appendChild(option);
                     });
                     loadReportButton.disabled = false;
-                    loadReportData();
+                    
+                    // 【修改點】頁面首次載入時，自動選擇最新的日期並觸發一次查詢
+                    dateSelector.value = dates[0]; // 自動選中最新日期 (列表已是降序)
+                    loadReportData(); // 自動加載報告
                 } else {
                     dateSelector.innerHTML = '<option value="">無可用報告日期</option>';
                     loadingMessage.textContent = '系統中尚無任何報告。';
                 }
             })
             .catch(handleError);
-    }
+}
     
     // --- API 呼叫：根據日期獲取學生摘要數據 ---
     function loadReportData() {
         let selectedDate = dateSelector.value;
         if (selectedDate === "" && dateSelector.options.length > 1) {
             selectedDate = dateSelector.options[1].value;
+            dateSelector.value = selectedDate; // 同步更新下拉選單的顯示
         }
 
         if (!selectedDate) {
@@ -578,29 +584,48 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        let summaryApiUrl = `/api/teacher/all_students_activity_summary?date=${selectedDate}`;
-        let behaviorApiUrl = `/api/teacher/behavior_summary_by_date?date=${selectedDate}`;
+        // 【修改點 1.1】新增 comprehensiveApiUrl
+        const summaryApiUrl = `/api/teacher/all_students_activity_summary?date=${selectedDate}`;
+        const behaviorApiUrl = `/api/teacher/behavior_summary_by_date?date=${selectedDate}`;
+        const comprehensiveApiUrl = `/api/teacher/get_comprehensive_report_by_date?date=${selectedDate}`;
 
+        // 更新 UI 狀態
         loadingMessage.style.display = 'block';
         loadingMessage.textContent = `正在查詢 ${selectedDate} 的報告數據...`;
         errorMessage.style.display = 'none';
         tabContents.forEach(tab => tab.style.display = 'none');
         document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
 
+        // 【修改點 1.2】使用 Promise.all 一次性獲取所有三份數據
         Promise.all([
-            fetch(summaryApiUrl).then(res => res.json()),
-            fetch(behaviorApiUrl).then(res => res.json())
+            fetch(summaryApiUrl).then(res => {
+                if (!res.ok) return Promise.reject({ response: res, message: `API Error: ${summaryApiUrl}` });
+                return res.json();
+            }),
+            fetch(behaviorApiUrl).then(res => {
+                if (!res.ok) return Promise.reject({ response: res, message: `API Error: ${behaviorApiUrl}` });
+                return res.json();
+            }),
+            fetch(comprehensiveApiUrl).then(res => {
+                if (!res.ok) return Promise.reject({ response: res, message: `API Error: ${comprehensiveApiUrl}` });
+                return res.json();
+            })
         ])
-        .then(([summaryData, behaviorData]) => {
+        .then(([summaryData, behaviorData, comprehensiveData]) => {
             if (summaryData.error) throw new Error(summaryData.error);
             if (behaviorData.error) throw new Error(behaviorData.error);
+            if (comprehensiveData.error) throw new Error(comprehensiveData.error);
             
             allStudentData = summaryData;
-            renderAllTabs(summaryData, behaviorData);
+            
+            // 【修改點 1.3】調用主渲染函數，傳入所有獲取到的數據
+            renderAllTabs(summaryData, behaviorData, comprehensiveData);
 
             loadingMessage.style.display = 'none';
+            
+            // 【修改點 1.4】預設打開「課堂綜合洞察」頁籤，並設置其按鈕為 active
             document.getElementById('webActivityTab').style.display = 'block';
-            document.querySelector('.tab-button').classList.add('active');
+            document.querySelector('.tab-button[onclick*="webActivityTab"]').classList.add('active');
         })
         .catch(handleError);
     }
@@ -609,60 +634,92 @@ document.addEventListener('DOMContentLoaded', function() {
     function handleError(error) {
         console.error('操作失敗:', error);
         loadingMessage.style.display = 'none';
-        errorMessage.textContent = `錯誤: ${escapeHtmlJs(error.message)}`;
-        errorMessage.style.display = 'block';
+
+        // 【新增】檢查是否為 401 未授權錯誤
+        // 這裡我們檢查 response 物件是否存在且 status 為 401
+        if (error.response && error.response.status === 401) {
+            alert("您的登入已過期，將為您導向登入頁面。");
+            // 強制將頁面重新導向到登入頁
+            window.location.href = '/login'; 
+        } else {
+            // 對於其他錯誤，維持原本的顯示方式
+            errorMessage.textContent = `錯誤: ${escapeHtmlJs(error.message)}`;
+            errorMessage.style.display = 'block';
+        }
     }
 
     // --- 數據渲染主函數 ---
-    function renderAllTabs(summaryData, behaviorData) {
-        // 假設這些函數都已存在
+    function renderAllTabs(summaryData, behaviorData, comprehensiveData) {
+        // 【新增】渲染新的綜合洞察頁籤
+        populateComprehensiveReportTab(comprehensiveData); 
+        
+        // 調用所有舊頁籤的渲染
         populateWebActivityTab(summaryData);
         populateBehaviorStatsTab(summaryData);
         populateImageExplorerTab(summaryData);
         populateCrossStudentTab(behaviorData);
     }
-    
     // --- 新增：聚焦與標註相關的所有函數 ---
     
     // 進入聚焦模式
-    async function enterFocusMode(dataset, element) { // <-- 增加 element 參數
+    async function enterFocusMode(dataset, element) {
         const container = document.querySelector('.dashboard-container');
         const focusImage = document.getElementById('focusImage');
         const originalBehaviorSpan = document.getElementById('originalBehavior');
         
-        // 【關鍵修改】將觸發此模式的原始圖片元素儲存起來
+        // 【修改點 1】獲取新增的 HTML 元素
+        const aiReasoningSpan = document.getElementById('aiReasoning');
+        const teacherPositionSpan = document.getElementById('teacherPosition');
+
         focusOverlay.currentTargetElement = element; 
 
         // 1. 先顯示聚焦面板和一個「載入中...」的提示
         focusOverlay.style.display = 'flex';
         container.classList.add('is-blurred');
-        focusImage.src = ""; // 清空舊圖片
+        focusImage.src = ""; // 先清空舊圖片
         originalBehaviorSpan.textContent = "正在載入上下文...";
         
-        // 2. 填充圖片和已知資訊
+        // 【修改點 2】為新增的欄位也設定「載入中」提示
+        aiReasoningSpan.textContent = '...';
+        teacherPositionSpan.textContent = '...';
+        
+        // 2. 填充圖片和已知資訊 (不變)
         focusImage.src = `/api/get_sequence_image?report_file=${encodeURIComponent(dataset.reportFilename)}&image_file=${encodeURIComponent(dataset.imageFilename)}`;
         originalBehaviorSpan.textContent = dataset.originalBehavior;
 
-        // 3. 【關鍵】呼叫新的後端 API 來獲取詳細上下文
-        let contextData = {}; // 用於儲存上下文的物件
+        // 3. 呼叫後端 API 來獲取詳細上下文 (不變)
+        let contextData = {};
         try {
             const response = await fetch(`/api/teacher/get_image_context?report_file=${encodeURIComponent(dataset.reportFilename)}&image_file=${encodeURIComponent(dataset.imageFilename)}`);
             if (!response.ok) {
                 console.error('獲取上下文失敗');
+                // 【修改點 3.1】即使 API 失敗，也要顯示提示文字
+                aiReasoningSpan.textContent = "獲取失敗";
+                teacherPositionSpan.textContent = "獲取失敗";
             } else {
                 contextData = await response.json();
+                // 【修改點 3.2】成功獲取數據後，填入對應的欄位
+                aiReasoningSpan.textContent = contextData.original_ai_reasoning || "未提供";
+                teacherPositionSpan.textContent = contextData.teacher_position || "未知";
             }
         } catch (error) {
             console.error('獲取上下文時發生網路錯誤:', error);
+            aiReasoningSpan.textContent = "網路錯誤";
+            teacherPositionSpan.textContent = "網路錯誤";
         }
 
-        // 4. 將所有數據 (原始數據 + 剛獲取的上下文) 一併存到 dataset 中，供 saveTag 使用
+        // 4. 將所有數據存到 dataset 中 (不變)
         const fullDataset = { ...dataset, ...contextData };
         focusOverlay.dataset.currentData = JSON.stringify(fullDataset);
 
-        // 5. 重置表單狀態 (這部分不變)
+        // 5. 【【【修改】】】 重置表單狀態，增加對新評分元件的重置
         const checkedRadio = document.querySelector('#errorRating input[name="rating"]:checked');
         if(checkedRadio) checkedRadio.checked = false;
+        
+        // 【【【新增】】】 重置教師信度評分
+        const checkedCalRating = document.querySelector('#calibrationConfidence input[name="cal_rating"]:checked');
+        if(checkedCalRating) checkedCalRating.checked = false;
+
         correctBehaviorSelect.value = dataset.originalBehavior;
     }
 
@@ -675,48 +732,45 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 儲存標註
     function saveTag() {
-        // 1. 從聚焦面板的 dataset 中獲取所有相關數據 (包含後端傳來的上下文)
+        // 1. 從聚焦面板的 dataset 中獲取所有相關數據
         const fullDataset = JSON.parse(focusOverlay.dataset.currentData);
         
         // 2. 獲取教師在表單中的輸入
         const rating = document.querySelector('#errorRating input[name="rating"]:checked')?.value;
         const correctBehavior = correctBehaviorSelect.value;
+        // 【【【新增】】】 獲取教師對自己校準的信度評分
+        const calibrationConfidence = document.querySelector('#calibrationConfidence input[name="cal_rating"]:checked')?.value;
 
         // 3. 驗證是否有選擇評分
         if (!rating) {
-            alert('請選擇錯誤程度評分！');
+            alert('請選擇 AI 的「錯誤程度」評分！');
+            return;
+        }
+        // 【【【新增】】】 驗證教師信度評分
+        if (!calibrationConfidence) {
+            alert('請評估您此次校準的「信度」！');
             return;
         }
 
-        // --- 【核心修正邏輯開始】---
-
-        // 4. 根據後端提供的數據，生成日期資料夾名稱
-        //    後端傳來 fullDataset.report_date_internal，其格式為 "08/24"
-        let dateFolder = "unknown_date"; // 設定一個安全的預設值
+        // --- 【核心修正邏輯開始】--- (這部分邏輯不變)
+        let dateFolder = "unknown_date";
         if (fullDataset.report_date_internal && fullDataset.report_date_internal !== "unknown") {
-            // 將 "08/24" 格式轉換為 "0824"
             dateFolder = fullDataset.report_date_internal.replace('/', '');
         }
-
-        // 5. 根據後端提供的數據，生成學生ID資料夾名稱
-        //    後端傳來 fullDataset.student_number，其格式為 "6"
-        let studentIdFolder = `ID_unknown`; // 設定一個安全的預設值
+        let studentIdFolder = `ID_unknown`;
         if (fullDataset.student_number && fullDataset.student_number !== "unknown") {
-            // 將 "6" 構建成 "ID_6" 的格式
             studentIdFolder = `ID_${fullDataset.student_number}`;
         }
-
-        // 6. 使用修正後的變數來組合成最終的、正確的圖片完整路徑
         const imageFullPath = `C:\\Users\\User\\Desktop\\test\\student_week_photo\\${dateFolder}\\${studentIdFolder}\\Keyframes\\${fullDataset.imageFilename}`;
-        
         // --- 【核心修正邏輯結束】---
 
-        // 7. 構建準備匯出的 JSON 物件
+        // 7. 【【【修改】】】 構建準備匯出的 JSON 物件，增加新欄位
         const tagObject = {
-            image_path: imageFullPath.replace(/\//g, '\\'), // 確保路徑分隔符是 Windows 格式的反斜線
+            image_path: imageFullPath.replace(/\//g, '\\'),
             original_behavior: fullDataset.originalBehavior,
             corrected_behavior: correctBehavior,
             error_rating: parseInt(rating),
+            calibration_confidence: parseInt(calibrationConfidence), // 【【【新增欄位】】】
             student_name: fullDataset.studentName,
             source_report: fullDataset.reportFilename,
             timestamp: new Date().toISOString(),
@@ -731,20 +785,18 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         };
         
-        // 8. 更新前端的狀態和 UI
-        taggingSessionData.push(tagObject); // 將新標註暫存起來
-        taggedImageIdentifiers.add(fullDataset.uniqueId); // 記錄此圖片已被標註
-        // tagCountSpan.textContent = taggingSessionData.length; // 更新計數
+        // 8. 更新前端的狀態和 UI (不變)
+        taggingSessionData.push(tagObject);
+        taggedImageIdentifiers.add(fullDataset.uniqueId);
         document.getElementById('tagCount').textContent = taggingSessionData.length;
-        exportButton.disabled = false; // 啟用匯出按鈕
+        exportButton.disabled = false;
         
-        // 將原始圖片的 UI 標記為已完成
         const originalImageWrapper = focusOverlay.currentTargetElement; 
         if (originalImageWrapper) {
             originalImageWrapper.classList.add('tagged');
         }
 
-        // 9. 退出聚焦模式
+        // 9. 退出聚焦模式 (不變)
         exitFocusMode();
     }
 
@@ -814,3 +866,143 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // 將 openTeacherTab 設為全局可訪問，因為它是從 HTML 的 onclick 屬性中調用的
 window.openTeacherTab = openTeacherTab;
+
+
+function populateComprehensiveReportTab(data) {
+    const container = document.getElementById('comprehensiveReportTab');
+    const summaryTitle = document.getElementById('summaryTitle');
+    const summaryNarrative = document.getElementById('summaryNarrative');
+    const summaryKeyTakeaways = document.getElementById('summaryKeyTakeaways');
+    const timelineCardsContainer = document.getElementById('timelineAnalysisCards');
+    const chartCanvas = document.getElementById('behaviorTrendChart');
+
+    summaryTitle.textContent = '';
+    summaryNarrative.textContent = '';
+    summaryKeyTakeaways.innerHTML = '';
+    timelineCardsContainer.innerHTML = '';
+
+    const reportData = data.report_data;
+
+    if (!reportData || !reportData.timeline_analysis || reportData.timeline_analysis.length === 0) {
+        container.querySelector('h3').textContent = "課堂綜合洞察報告 (無數據)";
+        summaryTitle.textContent = "此日期暫無綜合報告可供分析。";
+        if (behaviorChartInstance) {
+            behaviorChartInstance.destroy();
+            behaviorChartInstance = null;
+        }
+        return;
+    }
+    
+    // 1. 渲染宏觀總結
+    const overallSummary = reportData.overall_summary;
+    summaryTitle.textContent = overallSummary.title || "課堂總結";
+    summaryNarrative.textContent = overallSummary.narrative_insight || "無敘事性洞察。";
+    
+    let takeawaysHtml = '';
+    if (overallSummary.key_takeaways) {
+        takeawaysHtml += `<p><strong>教學亮點:</strong> ${escapeHtmlJs(overallSummary.key_takeaways.highlight || 'N/A')}</p>`;
+        takeawaysHtml += `<p><strong>關鍵挑戰:</strong> ${escapeHtmlJs(overallSummary.key_takeaways.challenge || 'N/A')}</p>`;
+        takeawaysHtml += `<p><strong>策略機會:</strong> ${escapeHtmlJs(overallSummary.key_takeaways.opportunity || 'N/A')}</p>`;
+    }
+    summaryKeyTakeaways.innerHTML = takeawaysHtml;
+
+    // 2. 準備圖表數據並渲染圖表
+    const timelineData = reportData.timeline_analysis;
+    const labels = timelineData.map(d => d.interval_start);
+    
+    const datasets = {
+        '專注學習(書寫/閱讀)': [], '專注聽講': [], '分心': [], '中性/其他': []
+    };
+
+    timelineData.forEach(d => {
+        const percentages = d.student_state_summary;
+        datasets['專注學習(書寫/閱讀)'].push(percentages['專注學習(書寫/閱讀)'] || 0);
+        datasets['專注聽講'].push(percentages['專注聽講'] || 0);
+        datasets['分心'].push(percentages['分心'] || 0);
+        datasets['中性/其他'].push(percentages['中性/其他'] || 0);
+    });
+
+    renderBehaviorTrendChart(chartCanvas, labels, datasets);
+
+    // 3. 渲染逐段洞察卡片
+    timelineData.forEach(interval => {
+        const card = document.createElement('div');
+        card.className = 'timeline-card';
+        
+        const insight = interval.ai_insight_and_recommendation;
+
+        card.innerHTML = `
+            <div class="card-header">
+                <h5>時間區段: ${escapeHtmlJs(interval.interval_start)} - ${escapeHtmlJs(interval.interval_end)}</h5>
+                <span class="activity-tag">${escapeHtmlJs(interval.teacher_activity_summary.state)}</span>
+            </div>
+            <div class="card-body">
+                <p><strong>教學法洞察:</strong> ${escapeHtmlJs(insight.pedagogical_insight || 'N/A')}</p>
+                <p><strong>可行動建議:</strong> ${escapeHtmlJs(insight.actionable_recommendation || 'N/A')}</p>
+            </div>
+        `;
+        timelineCardsContainer.appendChild(card);
+    });
+}
+
+// 【新增】渲染趨勢圖的函數
+function renderBehaviorTrendChart(canvas, labels, datasets) {
+    if (behaviorChartInstance) {
+        behaviorChartInstance.destroy(); // 銷毀舊圖表以避免重疊
+    }
+    
+    const chartData = {
+        labels: labels,
+        datasets: [
+            // ... (數據集內容與上一版相同)
+             {
+                label: '專注學習(書寫/閱讀)',
+                data: datasets['專注學習(書寫/閱讀)'],
+                backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                fill: true,
+                tension: 0.1
+            },
+            {
+                label: '專注聽講',
+                data: datasets['專注聽講'],
+                backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                fill: true,
+                tension: 0.1
+            },
+            {
+                label: '分心',
+                data: datasets['分心'],
+                backgroundColor: 'rgba(255, 99, 132, 0.6)',
+                borderColor: 'rgba(255, 99, 132, 1)',
+                fill: true,
+                tension: 0.1
+            },
+            {
+                label: '中性/其他',
+                data: datasets['中性/其他'],
+                backgroundColor: 'rgba(201, 203, 207, 0.6)',
+                borderColor: 'rgba(201, 203, 207, 1)',
+                fill: true,
+                tension: 0.1
+            }
+        ]
+    };
+
+    behaviorChartInstance = new Chart(canvas, {
+        type: 'line', 
+        data: chartData,
+        options: {
+            // ... (圖表選項與上一版相同)
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { title: { display: false }, tooltip: { mode: 'index', intersect: false } },
+            interaction: { mode: 'nearest', axis: 'x', intersect: false },
+            scales: {
+                x: { title: { display: true, text: '課堂時間' } },
+                y: { stacked: true, title: { display: true, text: '學生狀態比例 (%)' }, min: 0, max: 100 }
+            }
+        }
+    });
+}
