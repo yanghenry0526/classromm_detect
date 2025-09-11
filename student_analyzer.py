@@ -14,6 +14,8 @@ import math
 from dotenv import load_dotenv 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import bisect
+import torch
+import chromadb
 
 
 SAMPLING_RATE = 3  
@@ -23,7 +25,21 @@ MAX_TOKENS_SUMMARY_COMPLETION = 1000 # 個性化總結的 token
 BEHAVIOR_CONFIDENCE_THRESHOLD_FILTER = 0.96 # 行為信度過濾閾值 (例如 70%)
 IMAGES_PER_API_CALL = 10 # 一次API調用處理的圖片數量
 BEHAVIOR_SIMILARITY_CONFIDENCE_THRESHOLD = 0.15 # 過濾相似連續行為的信度差異閾值
-API_RETRY_DELAY_SECONDS = 10
+API_RETRY_DELAY_SECONDS = 15
+# NUM_RAG_EXAMPLES = 3  # <--- 在這裡設定 RAG 檢索的範例數量
+
+# --- ✅ 新增：動態 RAG 決策引擎的閾值設定 ---
+# 1. 每次固定從資料庫中檢索的最大範例數量
+MAX_RAG_RESULTS_TO_FETCH = 5
+
+# 2. 高信心閾值：如果最佳匹配的距離低於此值，說明找到完美範例，只用 1 個就夠了
+HIGH_CONFIDENCE_THRESHOLD = 0.22 # (可調整)
+
+# 3. 中等信心閾值：如果最佳匹配的距離低於此值，說明找到了不錯的參考，用 3 個來學習模式
+MEDIUM_CONFIDENCE_THRESHOLD = 0.28 # (可調整)
+
+# 4. 無效匹配閾值：如果最佳匹配的距離高於此值，說明沒找到任何有意義的參考，不用任何範例
+NO_MATCH_THRESHOLD = 0.40 # (可調整)
 
 # ==========================================================
 
@@ -210,7 +226,8 @@ def load_and_preprocess_calibrations(json_path):
             if original_behavior:
                 indexed_calibrations[original_behavior].append(record)
         for behavior in indexed_calibrations:
-            indexed_calibrations[behavior].sort(key=lambda x: x.get('error_rating', 5))
+            # indexed_calibrations[behavior].sort(key=lambda x: x.get('error_rating', 5))
+            indexed_calibrations[behavior].sort(key=lambda x: (-x.get('calibration_confidence', 3), x.get('error_rating', 5)))
         print(f"✅ 成功載入並索引 {len(data)} 筆校準紀錄，涵蓋 {len(indexed_calibrations)} 種錯誤類型。")
         return indexed_calibrations
     except Exception as e:
@@ -222,14 +239,16 @@ def load_and_preprocess_calibrations(json_path):
 # ---------------------------
 # 輔助函數
 # ---------------------------
-def analyze_single_student(student_task, indexed_calibrations, client, context_paths, report_date_str,deployment_names):
+def analyze_single_student(student_task, client, context_paths, report_date_str,deployment_names,rag_objects):
     """
     對單一學生進行完整的行為分析並儲存報告。
 
     :param student_task: 包含學生資訊的字典 (id, number, folder, position, start_offset)
-    :param indexed_calibrations: 預先載入的校準資料庫
     :param client: AzureOpenAI 客戶端實例
     :param context_paths: 包含所有情境資料路徑的字典 (teacher_pos, classroom_view, classroom_state)
+    :param report_date_str: 用於報告元數據的日期字串 (例如 "08/24")
+    :param deployment_names: 包含 vision 和 summary 模型部署名稱的字典
+    :param rag_objects: 包含 RAG 模型、處理器、資料庫集合和設備的字典
     """
     # 步驟 1: 從傳入的參數中獲取所有必需的資訊
     student_id = student_task['id']
@@ -311,8 +330,9 @@ def analyze_single_student(student_task, indexed_calibrations, client, context_p
                 teacher_positions_data=teacher_positions_data,
                 sorted_classroom_photos=sorted_classroom_photos, classroom_states=classroom_states,
                 client=client, student_id=student_id, student_position=student_position,
-                indexed_calibrations=indexed_calibrations, previous_batch_results=previous_batch_result,
-                deployment_names=deployment_names
+                # indexed_calibrations=indexed_calibrations, previous_batch_results=previous_batch_result,
+                deployment_names=deployment_names,
+                rag_objects=rag_objects
             )
             all_results_from_threads.append(result)
             previous_batch_result = result
@@ -432,60 +452,146 @@ def analyze_single_student(student_task, indexed_calibrations, client, context_p
         # 拋出一個錯誤，讓 run_all_students.py 可以捕捉到
         raise IOError(f"儲存學生 '{student_id}' 的 JSON 檔案時發生問題：{e}")
 
-def load_and_preprocess_calibrations(json_path):
-    """
-    【全新】讀取、索引並排序 calibration_export.json。
-    這一步是將扁平的數據列表，轉換成一個高效的、以錯誤為索引的知識庫。
-    """
-    if not os.path.isfile(json_path):
-        print("提示：未找到校準檔案 (calibration_export.json)，將不使用 Few-Shot 修正。")
-        return {}
+# def load_and_preprocess_calibrations(json_path):
+#     """
+#     【全新】讀取、索引並排序 calibration_export.json。
+#     這一步是將扁平的數據列表，轉換成一個高效的、以錯誤為索引的知識庫。
+#     """
+#     if not os.path.isfile(json_path):
+#         print("提示：未找到校準檔案 (calibration_export.json)，將不使用 Few-Shot 修正。")
+#         return {}
 
-    try:
-        with open(json_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+#     try:
+#         with open(json_path, 'r', encoding='utf-8') as f:
+#             data = json.load(f)
         
-        indexed_calibrations = defaultdict(list)
-        for record in data:
-            original_behavior = record.get("original_behavior")
-            if original_behavior:
-                indexed_calibrations[original_behavior].append(record)
+#         indexed_calibrations = defaultdict(list)
+#         for record in data:
+#             original_behavior = record.get("original_behavior")
+#             if original_behavior:
+#                 indexed_calibrations[original_behavior].append(record)
         
-        for behavior in indexed_calibrations:
-            indexed_calibrations[behavior].sort(key=lambda x: x.get('error_rating', 5))
+#         for behavior in indexed_calibrations:
+#             indexed_calibrations[behavior].sort(key=lambda x: x.get('error_rating', 5))
             
-        print(f"✅ 成功載入並索引 {len(data)} 筆校準紀錄，涵蓋 {len(indexed_calibrations)} 種錯誤類型。")
-        return indexed_calibrations
+#         print(f"✅ 成功載入並索引 {len(data)} 筆校準紀錄，涵蓋 {len(indexed_calibrations)} 種錯誤類型。")
+#         return indexed_calibrations
 
-    except Exception as e:
-        print(f"❌ 錯誤：處理校準檔案 {json_path} 時失敗: {e}")
-        return {}
+#     except Exception as e:
+#         print(f"❌ 錯誤：處理校準檔案 {json_path} 時失敗: {e}")
+#         return {}
 
-def select_relevant_examples(indexed_calibrations, previous_batch_results=None, num_examples=1):
+# def select_relevant_examples(indexed_calibrations, previous_batch_results=None, num_examples=1):
+#     """
+#     【全新】從索引好的知識庫中，動態選擇最相關的範例。
+#     """
+#     if not indexed_calibrations:
+#         return []
+
+#     if previous_batch_results and "analysis" in previous_batch_results:
+#         highlights = previous_batch_results["analysis"].get("per_image_highlights", [])
+#         if highlights:
+#             behavior_counts = Counter(
+#                 behavior
+#                 for hl in highlights
+#                 for behavior in hl.get("behavior_category", []) if isinstance(behavior, str) # 確保是字串
+#             )
+#             if behavior_counts:
+#                 most_common_error, _ = behavior_counts.most_common(1)[0]
+#                 if most_common_error in indexed_calibrations:
+#                     print(f"  [動態Few-Shot]: 偵測到近期潛在錯誤 '{most_common_error}'，選取針對性修正範例。")
+#                     return indexed_calibrations[most_common_error][:num_examples]
+
+#     print("  [動態Few-Shot]: 未找到針對性範例，選取全域最嚴重錯誤範例。")
+#     all_examples = [ex for sublist in indexed_calibrations.values() for ex in sublist]
+#     all_examples.sort(key=lambda x: x.get('error_rating', 5))
+#     return all_examples[:num_examples]
+def retrieve_visual_examples_mm_rag(image_path, rag_objects):
     """
-    【全新】從索引好的知識庫中，動態選擇最相關的範例。
+    【全新：v2.0 動態 RAG 版】
+    根據檢索結果的相似度分數，動態決定要提供給 AI 的範例數量。
     """
-    if not indexed_calibrations:
+    # --- 步驟 1: 從傳入的字典中安全地解包出所需物件 ---
+    model = rag_objects.get("model")
+    processor = rag_objects.get("processor")
+    collection = rag_objects.get("collection")
+    device = rag_objects.get("device")
+
+    if not all([model, processor, collection, device]):
+        print("  [Dynamic RAG]: 模型或資料庫物件不完整，跳過視覺檢索。")
+        return []
+    if not os.path.isfile(image_path):
+        print(f"  [Dynamic RAG]: 輸入的圖片路徑無效 '{image_path}'，無法進行視覺檢索。")
         return []
 
-    if previous_batch_results and "analysis" in previous_batch_results:
-        highlights = previous_batch_results["analysis"].get("per_image_highlights", [])
-        if highlights:
-            behavior_counts = Counter(
-                behavior
-                for hl in highlights
-                for behavior in hl.get("behavior_category", []) if isinstance(behavior, str) # 確保是字串
-            )
-            if behavior_counts:
-                most_common_error, _ = behavior_counts.most_common(1)[0]
-                if most_common_error in indexed_calibrations:
-                    print(f"  [動態Few-Shot]: 偵測到近期潛在錯誤 '{most_common_error}'，選取針對性修正範例。")
-                    return indexed_calibrations[most_common_error][:num_examples]
+    try:
+        # --- 步驟 2: 將查詢圖片轉換為向量 (Embedding) ---
+        query_image = Image.open(image_path).convert("RGB")
+        inputs = processor(images=query_image, return_tensors="pt").to(device)
+        with torch.no_grad():
+            image_features = model.get_image_features(**inputs)
+        norm_features = image_features / image_features.norm(p=2, dim=-1, keepdim=True)
+        query_embedding = norm_features.cpu().numpy().tolist()
 
-    print("  [動態Few-Shot]: 未找到針對性範例，選取全域最嚴重錯誤範例。")
-    all_examples = [ex for sublist in indexed_calibrations.values() for ex in sublist]
-    all_examples.sort(key=lambda x: x.get('error_rating', 5))
-    return all_examples[:num_examples]
+        # --- 步驟 3: 固定檢索較多數量的範例，並要求返回距離分數 ---
+        results = collection.query(
+            query_embeddings=query_embedding,
+            n_results=MAX_RAG_RESULTS_TO_FETCH, # <-- 使用我們設定的最大值
+            include=['metadatas', 'distances']   # <-- **關鍵**：要求返回距離分數
+        )
+
+        # --- 步驟 4: 解包檢索結果 ---
+        retrieved_metadatas = results.get('metadatas', [[]])[0]
+        distances = results.get('distances', [[]])[0]
+
+        if not distances:
+            print("  [Dynamic RAG]: 資料庫中未檢索到任何結果。")
+            return []
+
+        # --- 步驟 5: 【【【 核心決策引擎 】】】 ---
+        best_score = distances[0] # 最佳匹配的分數 (距離最小)
+        final_examples_to_use = []
+
+        if best_score > NO_MATCH_THRESHOLD:
+            # 情況 D: 最佳匹配的結果都不夠好，放棄使用範例
+            print(f"  [Dynamic RAG]: 無有效匹配 (最佳距離 {best_score:.3f})，不使用任何範例。")
+            final_examples_to_use = []
+        elif best_score <= HIGH_CONFIDENCE_THRESHOLD:
+            # 情況 A: 高信心匹配，只用最相關的那 1 個
+            print(f"  [Dynamic RAG]: 高信心匹配 (最佳距離 {best_score:.3f})，使用 1 則範例。")
+            final_examples_to_use = retrieved_metadatas[:1]
+        elif best_score <= MEDIUM_CONFIDENCE_THRESHOLD:
+            # 情況 B: 中等信心匹配，用 3 個來學習模式
+            print(f"  [Dynamic RAG]: 中等信心匹配 (最佳距離 {best_score:.3f})，使用 3 則範例。")
+            final_examples_to_use = retrieved_metadatas[:3]
+        else:
+            # 情況 C: 低信心/模糊匹配，提供所有檢索到的範例
+            print(f"  [Dynamic RAG]: 低信心/模糊匹配 (最佳距離 {best_score:.3f})，使用全部 {len(retrieved_metadatas)} 則範例。")
+            final_examples_to_use = retrieved_metadatas
+
+        if not final_examples_to_use:
+            return []
+
+        # --- 步驟 6: 從查詢結果中提取並還原元數據 (與舊版相同) ---
+        restored_examples = []
+        for meta in final_examples_to_use:
+            restored_meta = meta.copy()
+            for key, value in restored_meta.items():
+                if isinstance(value, str) and value.strip().startswith(('{', '[')):
+                    try:
+                        restored_meta[key] = json.loads(value)
+                    except json.JSONDecodeError:
+                        pass
+            restored_examples.append(restored_meta)
+
+        if restored_examples:
+            print(f"  [Dynamic RAG]: 成功檢索並還原 {len(restored_examples)} 筆視覺相似的範例。")
+
+        return restored_examples
+
+    except Exception as e:
+        print(f"  [Dynamic RAG]: 視覺檢索過程中發生嚴重錯誤: {e}")
+        return []
 
 def format_examples_for_prompt(examples_list):
     """
@@ -1141,25 +1247,34 @@ def find_closest_position(representative_timestamp, sorted_position_list, max_ti
     
     return "未知"
 
-def process_single_batch(batch_idx, image_batch_info, teacher_positions_data, sorted_classroom_photos, classroom_states, client, student_id, student_position, indexed_calibrations, previous_batch_results=None, deployment_names=None):
+def process_single_batch(batch_idx, image_batch_info, teacher_positions_data, sorted_classroom_photos, classroom_states, client, student_id, student_position, deployment_names, rag_objects):
     """
-    【升級版】處理單一圖片批次，並動態注入 Few-Shot 範例。
+    【Multimodal RAG 升級版】
+    處理單一圖片批次，並根據視覺相似度動態注入 Few-Shot 範例。
     """
     batch_student_paths = [info["path"] for info in image_batch_info]
     batch_image_filenames = [info["filename"] for info in image_batch_info]
     
     representative_timestamp = image_batch_info[0]["timestamp_obj"]
 
-    # --- 【新增】動態選擇並格式化 Few-Shot 範例 ---
-    selected_examples = select_relevant_examples(indexed_calibrations, previous_batch_results)
+    # --- 【【【核心修改點：替換為 Multimodal RAG 檢索】】】 ---
+    # 使用批次中的第一張圖片作為代表，來進行視覺搜索
+    representative_image_path = image_batch_info[0]["path"]
+    selected_examples = retrieve_visual_examples_mm_rag(
+        image_path=representative_image_path,
+        rag_objects=rag_objects,
+        # num_examples=NUM_RAG_EXAMPLES  # 您可以調整檢索數量
+    )
+    # --- 【【【修改結束】】】 ---
+    
     few_shot_prompt_str = format_examples_for_prompt(selected_examples)
 
-    # --- 為當前批次查找所有情境數據 (不變) ---
+    # --- 為當前批次查找所有情境數據 (此部分邏輯不變) ---
     teacher_position_text = find_closest_position(representative_timestamp, teacher_positions_data)
     classroom_view_path = find_closest_image_path(representative_timestamp, sorted_classroom_photos)
     classroom_state = find_state_for_timestamp(representative_timestamp, classroom_states)
 
-    # --- 呼叫【新版】分析函數 ---
+    # --- 呼叫分析函數 (此部分邏輯不變) ---
     sequence_analysis_data = analyze_student_behavior_from_images_sequence(
         student_image_paths=batch_student_paths,
         teacher_position_text=teacher_position_text,
@@ -1190,7 +1305,7 @@ def main_test():
     print("--- 學生分析模組 (單獨測試模式) ---")
     
     # 1. 初始化必要的共用物件
-    load_dotenv() # 測試模式下需要自己載入 .env
+    load_dotenv()
     try:
         client = AzureOpenAI(
             api_key=os.getenv("AZURE_OPENAI_KEY"),
@@ -1203,40 +1318,50 @@ def main_test():
         print(f"初始化 Azure OpenAI Client 時發生錯誤: {e}")
         return
 
-    # ✅ 新增：在測試模式下讀取部署名稱
     test_deployment_names = {
         'vision': os.getenv("CHAT_COMPLETION_NAME"),
         'summary': os.getenv("CHAT_COMPLETION_NAME")
     }
     print(f"使用模型: {test_deployment_names['vision']}")
-    
-    calibration_db_path = r'C:\Users\User\Desktop\test\training_json\calibration_export.json'
-    indexed_calibrations = load_and_preprocess_calibrations(calibration_db_path)
     print("-" * 40)
 
-    # 2. 手動收集單一學生的資訊
-    student_task = { ... } # (這部分不變)
+    # 2. 手動收集單一學生的資訊 (請根據您的實際情況修改)
+    student_task = {
+        'id': '測試學生', 
+        'number': 99, 
+        'folder': r'C:\Users\User\Desktop\test\student_week_photo\0713\ID_3\Keyframes', #<--請換成一個真實存在的路徑
+        'position': '第一排中間', 
+        'start_offset': '00:00:00'
+    }
 
     # 3. 手動設定情境路徑
-    date_mmdd = input("請輸入情境資料的日期 (MMDD, 例如 0824): ")
-    context_paths = { ... } # (這部分不變)
+    date_mmdd = input("請輸入情境資料的日期 (MMDD, 例如 0713): ")
+    context_paths = {
+        'classroom_view': rf'C:\Users\User\Desktop\test\student_full_classroom\{date_mmdd}_english_class',
+        'teacher_pos': rf'C:\Users\User\Desktop\test\teacher_position\{date_mmdd}_position.json',
+        'classroom_state': rf'C:\Users\User\Desktop\test\SynologyDrive\image\上課影片\{date_mmdd}\老師\TXT\{date_mmdd}.json'
+    }
     
     # 4. 呼叫主分析函式進行測試
     try:
         test_report_date = f"{date_mmdd[:2]}/{date_mmdd[2:]}"
         
-        # ✅ 在呼叫時，將 test_deployment_names 作為最後一個參數傳入
+        # 【【【核心修正】】】 使用新的函數簽名進行呼叫
         result_message = analyze_single_student(
             student_task, 
-            indexed_calibrations, 
             client, 
             context_paths, 
             test_report_date,
-            test_deployment_names  # <--- 補上這個參數
+            test_deployment_names
         )
         print(f"\n✅ 分析完成: {result_message}")
     except Exception as e:
+        import traceback
         print(f"\n❌ 執行分析時發生錯誤: {e}")
+        traceback.print_exc()
+
+if __name__ == "__main__":
+    main_test()
 
 if __name__ == "__main__":
     # 當直接執行 student_analyzer.py 這個檔案時，運行測試函式

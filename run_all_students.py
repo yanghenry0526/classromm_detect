@@ -1,5 +1,4 @@
 # run_all_students.py (v12.0 - 參數傳遞修正版)
-
 import os
 import csv
 from datetime import datetime
@@ -9,24 +8,27 @@ from openai import AzureOpenAI, AuthenticationError
 from dotenv import load_dotenv
 
 # 從分析模組匯入核心函數
-from student_analyzer import analyze_single_student, load_and_preprocess_calibrations
+from student_analyzer import analyze_single_student
+import torch
+import chromadb
+from transformers import CLIPProcessor, CLIPModel
 
 # ==========================================================================
 # --- 核心配置區 (所有設定都在此完成) ---
 # ==========================================================================
 # 1. 報告日期設定
-REPORT_DATE_STRING = "08/24"
+REPORT_DATE_STRING = "07/13"
 
 # 2. 要分析的日期 (對應資料夾名稱)
-ANALYSIS_DATE_MMDD = "0824"
+ANALYSIS_DATE_MMDD = "0713"
 
 # 3. 學生照片起始時間 (HH:MM:SS)
-START_TIME_OFFSET_CENTER = "00:13:47"
+START_TIME_OFFSET_CENTER = "00:02:46"
 START_TIME_OFFSET_LEFT   = "00:00:00"
 START_TIME_OFFSET_RIGHT  = "00:00:00"
 
 # 4. 要屏蔽的學生ID列表
-EXCLUDED_IDS = [1, 2, 6]
+EXCLUDED_IDS = []
 
 # 5. 基礎路徑與檔案設定
 MAX_CONCURRENT_STUDENTS = 3
@@ -43,8 +45,11 @@ PHOTO_BASE_FOLDER = r'C:\Users\User\Desktop\test\student_week_photo'
 
 # --- 輔助資料的【完整路徑】---
 CLASSROOM_VIEW_FOLDER = rf'C:\Users\User\Desktop\test\student_full_classroom\{ANALYSIS_DATE_MMDD}_english_class'
-TEACHER_POS_JSON = rf'C:\Users\User\Desktop\test\teacher_position\{ANALYSIS_DATE_MMDD}_position.json'
-CLASSROOM_STATE_JSON = rf'C:\Users\User\Desktop\test\SynologyDrive\image\上課影片\{ANALYSIS_DATE_MMDD}\老師\TXT\{ANALYSIS_DATE_MMDD}.json'
+# TEACHER_POS_JSON = rf'C:\Users\User\Desktop\test\teacher_position\{ANALYSIS_DATE_MMDD}_position.json'。
+TEACHER_POS_JSON = rf'C:\Users\User\Desktop\test\teacher_position\0720_position.json'
+
+# CLASSROOM_STATE_JSON = rf'C:\Users\User\Desktop\test\SynologyDrive\image\上課影片\{ANALYSIS_DATE_MMDD}\老師\TXT\{ANALYSIS_DATE_MMDD}.json'
+CLASSROOM_STATE_JSON = rf'C:\Users\User\Desktop\test\SynologyDrive\image\上課影片\0720\老師上課\TXT\0720.json'
 
 # ==========================================================================
 # --- 輔助函數 (無需修改) ---
@@ -85,13 +90,11 @@ def load_students_config(config_path):
 # --- 主執行區塊 ---
 # ==========================================================================
 def main():
-    print("--- 智慧學習分析系統 v12.0 - 參數傳遞修正版 ---")
+    print("--- 智慧學習分析系統 v13.0 - Multimodal RAG 版 ---")
     
     # --- 步驟 1: 整理所有路徑和設定 ---
     final_context_paths = {'classroom_view': CLASSROOM_VIEW_FOLDER, 'teacher_pos': TEACHER_POS_JSON, 'classroom_state': CLASSROOM_STATE_JSON}
     time_offsets = {'center': START_TIME_OFFSET_CENTER, 'left': START_TIME_OFFSET_LEFT, 'right': START_TIME_OFFSET_RIGHT}
-    
-    # ✅ 新增：將部署名稱打包成字典
     deployment_names = {'vision': VISION_DEPLOYMENT_NAME, 'summary': SUMMARY_DEPLOYMENT_NAME}
 
     print("\n--- 本次分析設定 ---")
@@ -111,17 +114,45 @@ def main():
     print(f"✅ 成功為 {len(all_students_tasks)} 位學生生成了分析任務。")
     print("-" * 60)
 
-    # --- 步驟 3: 初始化共用物件 ---
+    # --- 【【【核心修改點：合併初始化邏輯】】】 ---
+    # --- 步驟 3: 初始化所有共用物件 (OpenAI Client 和 RAG) ---
     try:
+        # 初始化 OpenAI Client
+        print("正在初始化 Azure OpenAI client...")
         client = AzureOpenAI(api_key=os.getenv("AZURE_OPENAI_KEY"), azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"), api_version="2024-02-01")
         client.models.list()
         print("✅ Azure OpenAI client 初始化成功。")
+        
+        # 初始化 Multimodal RAG 物件
+        print("正在載入 Multimodal RAG (CLIP) 模型及資料庫...")
+        if torch.cuda.is_available():
+            mm_rag_device = torch.device("cuda")
+        else:
+            mm_rag_device = torch.device("cpu")
+        
+        mm_rag_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32", use_safetensors=True).to(mm_rag_device)
+        mm_rag_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        mm_rag_model.eval()
+
+        chroma_client = chromadb.PersistentClient(path="student_behavior_vectordb")
+        mm_rag_collection = chroma_client.get_collection(name="behavior_calibrations")
+        print(f"✅ Multimodal RAG 準備就緒，裝置: {mm_rag_device}，資料庫中有 {mm_rag_collection.count()} 筆向量。")
+
+        # 將所有 RAG 相關物件打包成一個字典
+        rag_objects = {
+            "model": mm_rag_model,
+            "processor": mm_rag_processor,
+            "collection": mm_rag_collection,
+            "device": mm_rag_device
+        }
+
     except Exception as e:
-        print(f"❌ 致命錯誤：初始化 Azure OpenAI Client 時發生錯誤: {e}")
+        # 任何一個初始化失敗，都直接終止程式
+        print(f"❌ 致命錯誤: 初始化共用物件時失敗: {e}。程式終止。")
         return
     
-    indexed_calibrations = load_and_preprocess_calibrations(CALIBRATION_DB_PATH)
     print("-" * 60)
+    # --- 【【【修改結束】】】 ---
     
     # --- 步驟 4: 並行處理所有任務 ---
     with ThreadPoolExecutor(max_workers=MAX_CONCURRENT_STUDENTS) as executor:
@@ -129,11 +160,11 @@ def main():
             executor.submit(
                 analyze_single_student, 
                 student_task, 
-                indexed_calibrations, 
                 client, 
                 final_context_paths,
                 REPORT_DATE_STRING,
-                deployment_names  # ✅ 新增：傳入部署名稱字典
+                deployment_names,
+                rag_objects
             ): student_task 
             for student_task in all_students_tasks
         }
