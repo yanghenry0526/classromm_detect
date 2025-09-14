@@ -9,6 +9,7 @@ import glob
 import re
 import base64 
 import datetime
+import random
 
 # --- App Configuration ---
 app = Flask(__name__, instance_relative_config=True)
@@ -24,7 +25,7 @@ app.config['NOTES_REPORT_FOLDER'] = r'C:\Users\User\Desktop\test\note_json'
 app.config['NOTES_BLACKBOARD_FOLDER'] = r'C:\Users\User\Desktop\test\note_blackboard'
 app.config['TRAINING_JSON_FOLDER'] = r'C:\Users\User\Desktop\test\training_json'
 app.config['FEW_SHOT_EXAMPLES_FILENAME'] = 'few_shot_examples.json'
-
+app.config['HUMAN_ANNOTATION_FILENAME'] = 'human_annotation_export.json'
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
@@ -454,22 +455,54 @@ def api_log_click_event():
     return jsonify({'success': False, 'message': '缺少點擊元素信息'}), 400
 
 # --- Helper function to create initial users ---
+# def create_initial_users():
+#     with app.app_context():
+#         db.create_all() # 確保表已創建
+#         if not User.query.filter_by(username='a123').first():
+#             student_user = User(username='a123', role='student')
+#             student_user.set_password('a123')
+#             db.session.add(student_user)
+#             print(f"學生用戶 {student_user.username} 已創建。")
+#         if not User.query.filter_by(username='b123').first():
+#             teacher_user = User(username='b123', role='teacher')
+#             teacher_user.set_password('b123')
+#             db.session.add(teacher_user)
+#             print(f"教師用戶 {teacher_user.username} 已創建。")
+#         try:
+#             db.session.commit()
+#             print("初始用戶提交完成 (如果之前不存在)。")
+#         except Exception as e:
+#             db.session.rollback()
+#             print(f"提交初始用戶時發生錯誤: {e}")
+
 def create_initial_users():
     with app.app_context():
-        db.create_all() # 確保表已創建
-        if not User.query.filter_by(username='a123').first():
-            student_user = User(username='a123', role='student')
-            student_user.set_password('a123')
-            db.session.add(student_user)
-            print(f"學生用戶 {student_user.username} 已創建。")
-        if not User.query.filter_by(username='b123').first():
-            teacher_user = User(username='b123', role='teacher')
-            teacher_user.set_password('b123')
-            db.session.add(teacher_user)
-            print(f"教師用戶 {teacher_user.username} 已創建。")
+        db.create_all() # 確保資料庫和表已創建
+
+        # --- 1. 定義所有需要創建的帳號 ---
+        users_to_create = {
+            # 學生帳號
+            'a123': {'password': 'a123', 'role': 'student'},
+            # 原始教師/管理員帳號
+            'b123': {'password': 'b123', 'role': 'teacher'},
+            # 【【【 三個新的標註員帳號 】】】
+            'c123': {'password': 'c123', 'role': 'teacher'},
+            'd123': {'password': 'd123', 'role': 'teacher'},
+            'e123': {'password': 'e123', 'role': 'teacher'}
+        }
+
+        # --- 2. 遍歷並創建帳號 (如果不存在的話) ---
+        for username, details in users_to_create.items():
+            if not User.query.filter_by(username=username).first():
+                new_user = User(username=username, role=details['role'])
+                new_user.set_password(details['password'])
+                db.session.add(new_user)
+                print(f"用戶 {username} (角色: {details['role']}) 已創建。")
+
+        # --- 3. 提交到資料庫 ---
         try:
             db.session.commit()
-            print("初始用戶提交完成 (如果之前不存在)。")
+            print("初始用戶檢查並提交完成。")
         except Exception as e:
             db.session.rollback()
             print(f"提交初始用戶時發生錯誤: {e}")
@@ -849,66 +882,6 @@ def get_all_available_dates(report_root_folder):
     
     return sorted(list(unique_dates), reverse=True)
 
-# @app.route('/api/teacher/available_report_dates')
-# @login_required
-# def get_available_report_dates():
-#     if current_user.role != 'teacher':
-#         return jsonify({"error": "權限不足"}), 403
-
-#     report_root_folder = app.config['BEHAVIOR_REPORT_FOLDER']
-#     unique_dates = set()
-
-#     if not os.path.isdir(report_root_folder):
-#         return jsonify([])
-
-#     try:
-#         for student_folder_name in os.listdir(report_root_folder):
-#             full_student_path = os.path.join(report_root_folder, student_folder_name)
-#             if os.path.isdir(full_student_path):
-#                 for report_filename in os.listdir(full_student_path):
-#                     if report_filename.endswith(".json"):
-#                         report_path = os.path.join(full_student_path, report_filename)
-#                         try:
-#                             # 步驟 1: 安全地從檔名獲取年份
-#                             year_match = re.search(r'_(\d{4})\d{4}_', report_filename)
-#                             if not year_match:
-#                                 print(f"警告：檔案 {report_filename} 名稱格式不符，已跳過。")
-#                                 continue
-#                             report_year = year_match.group(1)
-
-#                             with open(report_path, 'r', encoding='utf-8') as f:
-#                                 data = json.load(f)
-                            
-#                             # 步驟 2: 安全地從 JSON 內部獲取月日
-#                             metadata = data.get('report_metadata', {})
-#                             report_time_str = metadata.get('report_generation_time')
-                            
-#                             if not report_time_str or not isinstance(report_time_str, str):
-#                                 print(f"警告：檔案 {report_filename} 內部缺少或格式錯誤的 report_generation_time，已跳過。")
-#                                 continue
-
-#                             # 步驟 3: 安全地解析月日並組合
-#                             parts = re.split(r'[/]', report_time_str)
-#                             if len(parts) == 2:
-#                                 month = parts[0].zfill(2)
-#                                 day = parts[1].zfill(2)
-#                                 full_date = f"{report_year}-{month}-{day}"
-#                                 unique_dates.add(full_date)
-#                             else:
-#                                 print(f"警告：檔案 {report_filename} 內部日期格式 '{report_time_str}' 不符，已跳過。")
-#                                 continue
-
-#                         # 步驟 4: 捕獲所有其他未預料的錯誤
-#                         except Exception as e:
-#                             print(f"警告：處理檔案 {report_filename} 時發生未預期錯誤: {e}")
-#                             continue
-                            
-#     except Exception as e:
-#         print(f"錯誤：掃描報告日期時出錯: {e}")
-#         return jsonify({"error": "掃描報告日期時出錯"}), 500
-    
-#     sorted_dates = sorted(list(unique_dates), reverse=True)
-#     return jsonify(sorted_dates)
 @app.route('/api/teacher/available_report_dates')
 @login_required
 def get_available_report_dates():
@@ -1321,6 +1294,184 @@ def api_get_comprehensive_report_by_date():
     except Exception as e:
         print(f"獲取課堂綜合報告時發生錯誤: {e}")
         return jsonify({"error": "伺服器在獲取綜合報告時發生錯誤"}), 500
+
+@app.route('/api/teacher/get_sampled_images_for_annotation')
+@login_required
+def api_get_sampled_images_for_annotation():
+    """
+    為校準工作台獲取智慧抽樣的圖片列表。
+    1. 抽樣結果根據日期和學生姓名固定，可重複獲取。
+    2. 根據當前登入的使用者，讀取其個人的歷史標註記錄。
+    3. 將抽樣列表和歷史標註整合後一次性返回給前端。
+    """
+    # --- 步驟 0: 權限與參數檢查 ---
+    if current_user.role != 'teacher':
+        return jsonify({"error": "權限不足"}), 403
+
+    selected_date_str = request.args.get('date')
+    if not selected_date_str:
+        return jsonify({"error": "必須提供日期參數"}), 400
+
+    # --- 步驟 1: 根據當前登入者，讀取其個人歷史標註 ---
+    historical_annotations = {}
+    try:
+        annotator_username = current_user.username
+        # 動態生成個人化的檔名，例如: human_annotation_c123.json
+        filename = f"human_annotation_{annotator_username}.json"
+        annotation_file_path = os.path.join(app.config['TRAINING_JSON_FOLDER'], filename)
+        
+        if os.path.isfile(annotation_file_path):
+            with open(annotation_file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                if content:
+                    all_annotations = json.loads(content)
+                    # 將列表轉換為以 'image_path' 為鍵的字典，以便前端快速查找
+                    historical_annotations = {item['image_path']: item for item in all_annotations}
+        print(f"使用者 {annotator_username} 成功讀取 {len(historical_annotations)} 筆歷史標註。")
+    except Exception as e:
+        print(f"警告：為使用者 {annotator_username} 讀取歷史標註檔案時出錯: {e}")
+    
+    # --- 步驟 2: 遍歷學生，進行固定的隨機抽樣 ---
+    report_root_folder = app.config['BEHAVIOR_REPORT_FOLDER']
+    all_students_sampled_images = {}
+    try:
+        student_folders = [d for d in os.listdir(report_root_folder) if os.path.isdir(os.path.join(report_root_folder, d))]
+        
+        for student_name in student_folders:
+            # 2a. 尋找符合日期的報告檔案 (此邏輯與其他API一致)
+            student_report_folder = os.path.join(report_root_folder, student_name)
+            found_report_path = None
+            all_files = sorted(glob.glob(os.path.join(student_report_folder, f"student_{student_name}_behavior_report_*.json")), reverse=True)
+            for report_path in all_files:
+                try:
+                    report_filename = os.path.basename(report_path)
+                    year_match = re.search(r'_(\d{4})\d{4}_', report_filename)
+                    if not year_match: continue
+                    report_year = year_match.group(1)
+
+                    with open(report_path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    internal_time_str = data.get('report_metadata', {}).get('report_generation_time')
+                    
+                    if internal_time_str and isinstance(internal_time_str, str):
+                        parts = re.split(r'[/]', internal_time_str)
+                        if len(parts) == 2:
+                            month, day = parts[0].zfill(2), parts[1].zfill(2)
+                            internal_full_date = f"{report_year}-{month}-{day}"
+                            if internal_full_date == selected_date_str:
+                                found_report_path = report_path
+                                break
+                except Exception as e:
+                    print(f"警告: 處理報告 {os.path.basename(report_path)} 時發生錯誤: {e}")
+                    continue
+            
+            if not found_report_path:
+                continue
+
+            # 2b. 設定固定的隨機種子，確保每次抽樣結果都一樣
+            session_seed = f"{selected_date_str}-{student_name}"
+            random.seed(session_seed)
+
+            # 2c. 執行智慧抽樣
+            with open(found_report_path, 'r', encoding='utf-8') as f:
+                report_data = json.load(f)
+
+            high_confidence_images = []
+            low_confidence_images = []
+            for batch in report_data.get("detailed_sequence_analysis", []):
+                for i, image_filename in enumerate(batch.get("image_filenames_in_batch", [])):
+                    try:
+                        highlight = batch["analysis"]["per_image_highlights"][i]
+                        confidence = highlight.get("confidence", 0.0)
+                        original_behavior_raw = highlight.get("behavior_category", "未知")
+                        original_behavior = original_behavior_raw[0] if isinstance(original_behavior_raw, list) else original_behavior_raw
+                        
+                        image_info = {
+                            "report_filename": os.path.basename(found_report_path),
+                            "image_filename": image_filename,
+                            "original_behavior": original_behavior,
+                            "student_name": student_name
+                        }
+
+                        if confidence >= 0.95:
+                            high_confidence_images.append(image_info)
+                        else:
+                            low_confidence_images.append(image_info)
+                    except (IndexError, KeyError) as e:
+                        print(f"警告: 處理報告 {os.path.basename(found_report_path)} 中的批次資料時出錯: {e}")
+                        continue
+            
+            high_sample_size = min(int(len(high_confidence_images) * 0.1), len(high_confidence_images))
+            low_sample_size = min(int(len(low_confidence_images) * 0.9), len(low_confidence_images))
+            sampled_high = random.sample(high_confidence_images, k=high_sample_size)
+            sampled_low = random.sample(low_confidence_images, k=low_sample_size)
+            
+            final_sample_list = sampled_high + sampled_low
+            random.shuffle(final_sample_list)
+
+            if final_sample_list:
+                all_students_sampled_images[student_name] = final_sample_list
+
+    except Exception as e:
+        import traceback
+        print(f"!!!!!!!!!!!! API ERROR in /api/teacher/get_sampled_images_for_annotation !!!!!!!!!!!!")
+        print(traceback.format_exc())
+        return jsonify({"error": "伺服器在抽樣圖片時發生內部錯誤。"}), 500
+
+    # --- 步驟 3: 將抽樣列表和個人歷史標註整合後，一次性返回 ---
+    return jsonify({
+        "sampled_images": all_students_sampled_images,
+        "historical_annotations": historical_annotations
+    })
+
+# 【新增】API：儲存來自校準工作台的人工標註數據
+@app.route('/api/teacher/export_human_annotations', methods=['POST'])
+@login_required
+def api_export_human_annotations():
+    if current_user.role != 'teacher':
+        return jsonify({"error": "權限不足"}), 403
+
+    new_tagged_data = request.get_json()
+    if not new_tagged_data or not isinstance(new_tagged_data, list):
+        return jsonify({"success": False, "message": "無效的數據格式"}), 400
+
+    try:
+        target_folder = app.config['TRAINING_JSON_FOLDER']
+        if not os.path.exists(target_folder):
+            os.makedirs(target_folder)
+        
+        # 【核心修改】根據當前登入的使用者名稱，動態生成檔名
+        # 例如，登入者是 c123，檔名就是 human_annotation_c123.json
+        annotator_username = current_user.username
+        filename = f"human_annotation_{annotator_username}.json"
+        file_path = os.path.join(target_folder, filename)
+
+        # 後續的讀取、去重、寫入邏輯完全不變
+        existing_data = []
+        if os.path.isfile(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                if content:
+                    existing_data = json.loads(content)
+        
+        updated_data = existing_data + new_tagged_data
+        
+        final_data_dict = {item['image_path']: item for item in updated_data}
+        final_data_list = list(final_data_dict.values())
+
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(final_data_list, f, ensure_ascii=False, indent=4)
+        
+        print(f"使用者 {annotator_username} 成功更新標註數據: {file_path}")
+        return jsonify({
+            "success": True, 
+            "message": f"成功將 {len(new_tagged_data)} 筆您的個人標註寫入資料庫。",
+            "total_records": len(final_data_list)
+        }), 200
+
+    except Exception as e:
+        print(f"更新人工標註檔案時發生嚴重錯誤: {e}")
+        return jsonify({"success": False, "message": "伺服器內部錯誤"}), 500
 
 if __name__ == '__main__':
     # 確保 instance 和 json_behavior 文件夾存在

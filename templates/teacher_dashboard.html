@@ -18,6 +18,7 @@
         <button class="tab-button" onclick="openTeacherTab(event, 'behaviorStatsTab')">課堂行為統計</button>
         <button class="tab-button" onclick="openTeacherTab(event, 'imageExplorerTab')">行為影像瀏覽</button>
         <button class="tab-button" onclick="openTeacherTab(event, 'crossStudentImageTab')">跨學生行為總覽</button>
+        <button class="tab-button" onclick="openTeacherTab(event, 'annotationWorkbenchTab')">校準工作台</button>
         <button class="tab-button" onclick="openTeacherTab(event, 'comprehensiveReportTab')">課堂綜合洞察</button>
     </div>
 
@@ -79,12 +80,12 @@
      <div id="crossStudentImageContainer">
         <!-- 跨學生行為影像瀏覽器將由JS動態生成於此 -->
     </div>
-</div>
 
-<div class="dashboard-actions">
+    <div class="dashboard-actions">
         <button id="exportButton" disabled>匯出校準數據 (<span id="tagCount">0</span>)</button>
     </div>
 </div>
+
 
 <!-- 【修改點 3】移除舊的 imageModal，改為全新的聚焦標註懸浮層 -->
 <!-- 這不是一個全螢幕的 modal，而是一個更輕量的懸浮層 -->
@@ -130,6 +131,139 @@
             
             <button id="saveTagButton">儲存此筆標註</button>
         </div>
+    </div>
+</div>
+
+<div id="annotationWorkbenchTab" class="tab-content" style="display: none;">
+    <h3>校準工作台</h3>
+    <p>在此模式下，系統會智慧抽樣出需要您複核的影像。請依據您的專業判斷，直接對影像進行標註。</p>
+    
+    <div id="annotationWorkbenchLayout" class="annotation-workbench-layout">
+        <!-- 左側：學生列表 -->
+        <div class="student-list-container">
+            <h4>學生列表</h4>
+            <ul id="annotationStudentList" class="student-list">
+                <!-- 學生列表將由 JS 動態生成 -->
+            </ul>
+        </div>
+
+        <!-- 右側：標註介面 -->
+        <div class="annotation-area">
+            <div id="annotationInterface" style="display: none;">
+                <div class="annotation-header">
+                    <h4 id="annotationStudentName"></h4>
+                    <span id="annotationProgress" class="progress-indicator"></span>
+                </div>
+
+                <div class="image-navigation-container">
+                    <button id="prevImageBtn" class="image-nav-btn">◀ 上一張</button>
+                    <div class="annotation-image-wrapper">
+                        <img id="annotationImage" src="" alt="待標註圖片">
+
+                        <div id="annotationStatusOverlay" class="annotation-status-overlay" style="display: none;">
+                            <span>✓ 已校準</span>
+                        </div>
+                        
+                    </div>
+                    <button id="nextImageBtn" class="image-nav-btn">下一張 ▶</button>
+                </div>
+
+                <div class="annotation-form">
+                    <div class="form-group">
+                        <label>當時課堂情境 : 藍色位置為學生、紅色位置危老師</label>
+                        <div id="classroomLayoutVisualizer" class="classroom-layout-visualizer">
+                            <!-- 學生座位區 -->
+                            <div class="seating-chart">
+                                <!-- 第五排 -->
+                                <div class="desk-row">
+                                    <div class="desk" data-position="5-left"></div>
+                                    <div class="desk" data-position="5-center"></div>
+                                    <div class="desk" data-position="5-right"></div>
+                                </div>
+                                <!-- 第四排 -->
+                                <div class="desk-row">
+                                    <div class="desk" data-position="4-left"></div>
+                                    <div class="desk" data-position="4-center"></div>
+                                    <div class="desk" data-position="4-right"></div>
+                                </div>
+                                <!-- 第三排 -->
+                                <div class="desk-row">
+                                    <div class="desk" data-position="3-left"></div>
+                                    <div class="desk" data-position="3-center"></div>
+                                    <div class="desk" data-position="3-right"></div>
+                                </div>
+                                <!-- 第二排 -->
+                                <div class="desk-row">
+                                    <div class="desk" data-position="2-left"></div>
+                                    <div class="desk" data-position="2-center"></div>
+                                    <div class="desk" data-position="2-right"></div>
+                                </div>
+                                <!-- 第一排 -->
+                                <div class="desk-row">
+                                    <div class="desk" data-position="1-left"></div>
+                                    <div class="desk" data-position="1-center"></div>
+                                    <div class="desk" data-position="1-right"></div>
+                                </div>
+                            </div>
+                            <!-- 教師位置區 (黑板前) -->
+                            <div class="teacher-area">
+                                
+                                <div id="teacherPositionStatus" class="status-message" style="display: none;"></div>
+
+                                <div class="position-zone-wrapper">
+                                    <div class="position-zone" data-position="右">右</div>
+                                    <div class="position-zone" data-position="偏右">偏右</div>
+                                    <div class="position-zone" data-position="中">中</div>
+                                    <div class="position-zone" data-position="偏左">偏左</div>
+                                    <div class="position-zone" data-position="左">左</div>
+                                </div>
+
+                                <div class="blackboard-label">黑板</div>
+
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="annoCorrectBehavior">請選擇您判斷的行為:</label>
+                        <select id="annoCorrectBehavior" name="correct_behavior"></select>
+                    </div>
+
+                    <!-- <div class="form-group">
+                        <label>請評估您此次標註的信度 (1:不太確定, 5:非常確定):</label>
+                        <div id="annoConfidenceRating" class="rating-stars">
+                            <input type="radio" id="anno-star5" name="anno_rating" value="5"><label for="anno-star5">★</label>
+                            <input type="radio" id="anno-star4" name="anno_rating" value="4"><label for="anno-star4">★</label>
+                            <input type="radio" id="anno-star3" name="anno_rating" value="3"><label for="anno-star3">★</label>
+                            <input type="radio" id="anno-star2" name="anno_rating" value="2"><label for="anno-star2">★</label>
+                            <input type="radio" id="anno-star1" name="anno_rating" value="1"><label for="anno-star1">★</label>
+                        </div>
+                    </div> -->
+                    <div class="form-group">
+                        <label>請評估您此次標註的信度 (1:不太確定, 5:非常確定):</label>
+                        <!-- 評分條容器 -->
+                        <div id="confidenceSlider" class="confidence-slider">
+                            <!-- 評分條的五個等級區塊 -->
+                            <div class="rating-block" data-value="1"><span>1</span></div>
+                            <div class="rating-block" data-value="2"><span>2</span></div>
+                            <div class="rating-block" data-value="3"><span>3</span></div>
+                            <div class="rating-block" data-value="4"><span>4</span></div>
+                            <div class="rating-block" data-value="5"><span>5</span></div>
+                        </div>
+                    </div>
+                    
+                    <div class="annotation-actions">
+                         <button id="saveAnnotationBtn" class="button-primary">儲存此筆標註</button>
+                    </div>
+                </div>
+            </div>
+            <div id="annotationPlaceholder" class="placeholder-text">
+                <p>請從左側選擇一位學生開始進行標註。</p>
+            </div>
+        </div>
+    </div>
+    <div class="dashboard-actions">
+        <button id="exportAnnotationsButton" disabled>匯出本次標註數據 (<span id="annotationCount">0</span>)</button>
     </div>
 </div>
 

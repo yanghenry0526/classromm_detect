@@ -1584,161 +1584,500 @@ ul.flashes li.warning {
 }
 
 
-/* --- 課堂綜合洞察報告頁籤樣式 --- */
+/* --- 校準工作台 (Annotation Workbench) 樣式 --- */
 
-.summary-card {
-    background-color: #f9f9f9;
-    border-left: 5px solid #007bff;
-    padding: 20px;
-    margin-bottom: 25px;
-    border-radius: 0 8px 8px 0;
+.annotation-workbench-layout {
+    display: flex;
+    gap: 20px;
+    margin-top: 20px;
+    min-height: 600px;
 }
 
-.summary-card h4 {
+.student-list-container {
+    flex: 0 0 250px; /* 固定寬度，不縮放 */
+    border-right: 1px solid #ddd;
+    padding-right: 20px;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.student-list-container h4 {
     margin-top: 0;
-    color: #333;
+    color: #495057;
 }
 
-.summary-card p {
-    color: #555;
-    line-height: 1.6;
-}
-
-.summary-card ul {
-    padding-left: 20px;
-    margin-top: 10px;
-}
-
-.summary-card ul li {
-    margin-bottom: 8px;
-    color: #444;
-}
-
-.chart-container {
-    position: relative;
-    height: 400px; /* 給圖表一個固定的高度 */
-    width: 100%;
-    margin-bottom: 30px;
-    padding: 15px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-}
-
-.timeline-analysis-container h4 {
-    border-bottom: 2px solid #eee;
-    padding-bottom: 10px;
-    margin-bottom: 20px;
-}
-
-.timeline-card {
-    background-color: #ffffff;
-    border: 1px solid #e9ecef;
-    border-radius: 8px;
-    margin-bottom: 15px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    transition: box-shadow 0.3s ease;
-}
-
-.timeline-card:hover {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-
-.card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background-color: #f8f9fa;
-    padding: 12px 20px;
-    border-bottom: 1px solid #e9ecef;
-    border-radius: 8px 8px 0 0;
-}
-
-.card-header h5 {
+.student-list {
+    list-style-type: none;
+    padding: 0;
     margin: 0;
-    color: #495057;
 }
 
-.activity-tag {
-    background-color: #e2e6ea;
-    color: #495057;
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 0.85em;
-    font-weight: 500;
-}
-
-.card-body {
-    padding: 20px;
-}
-
-.card-body p {
-    margin: 0 0 12px 0;
-    line-height: 1.7;
-    color: #6c757d;
-}
-
-.card-body p strong {
-    color: #343a40;
-}
-
-.focus-nav-btn {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    background-color: rgba(0, 0, 0, 0.5);
-    color: white;
-    border: none;
-    padding: 16px;
-    font-size: 24px;
+.student-list li {
+    padding: 10px 15px;
     cursor: pointer;
-    z-index: 1002;
-    border-radius: 50%;
-    width: 50px;
-    height: 50px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background-color 0.3s ease;
+    border-radius: 5px;
+    margin-bottom: 5px;
+    transition: background-color 0.2s;
 }
 
-.focus-nav-btn:hover {
-    background-color: rgba(0, 0, 0, 0.8);
+.student-list li:hover {
+    background-color: #f0f0f0;
 }
 
-.focus-nav-btn.prev {
-    left: 20px;
+.student-list li.active {
+    background-color: #007bff;
+    color: white;
+    font-weight: bold;
 }
 
-.focus-nav-btn.next {
-    right: 20px;
-}
-
-.focus-nav-btn:disabled {
-    opacity: 0.3;
+.student-list li.disabled {
+    color: #999;
     cursor: not-allowed;
 }
 
-/* --- 校準模式學生列表的樣式 --- */
-#calibrationStudentListContainer {
+.annotation-area {
+    flex-grow: 1; /* 佔據剩餘空間 */
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
+}
+
+.annotation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.progress-indicator {
+    font-size: 0.9em;
+    font-weight: bold;
+    color: #6c757d;
+}
+
+.image-navigation-container {
+    display: flex;
+    align-items: center;
     gap: 15px;
+    margin-bottom: 20px;
+}
+
+.image-nav-btn {
+    padding: 10px 15px;
+    font-size: 1em;
+    cursor: pointer;
+    border: 1px solid #ccc;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+}
+
+.image-nav-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.annotation-image-wrapper {
+    flex-grow: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #f0f0f0;
+    border: 1px solid #ddd;
+    min-height: 400px; /* 確保有最小高度 */
+    max-height: 500px;
+    position: relative;
+    overflow: hidden; /* 確保覆蓋層的圓角不會超出邊界 */
+}
+
+#annotationImage {
+    max-width: 100%;
+    max-height: 500px; /* 限制圖片最大高度 */
+    object-fit: contain;
+}
+
+.annotation-form {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.annotation-form .form-group {
+    margin-bottom: 15px;
+}
+.annotation-form .context-info {
+    font-weight: bold;
+    color: #333;
+}
+
+.annotation-actions {
+    text-align: right;
     margin-top: 20px;
 }
 
-.calibration-student-btn {
-    padding: 12px 20px;
-    font-size: 1em;
-    cursor: pointer;
-    background-color: #f0f0f0;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    transition: all 0.2s ease-in-out;
+.placeholder-text {
+    flex-grow: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #888;
+    font-size: 1.2em;
+    background-color: #f9f9f9;
+    border-radius: 8px;
 }
 
-.calibration-student-btn:hover {
-    background-color: #e2e2e2;
-    border-color: #ccc;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+/* 確保 rating-stars 在新介面中也能正常顯示 */
+#annoConfidenceRating.rating-stars {
+    direction: rtl;
+    display: inline-block;
+}
+#annoConfidenceRating input[type=radio] {
+    display: none;
+}
+#annoConfidenceRating label {
+    color: #ccc;
+    font-size: 2em;
+    cursor: pointer;
+}
+#annoConfidenceRating input[type=radio]:checked ~ label,
+#annoConfidenceRating label:hover,
+#annoConfidenceRating label:hover ~ label {
+    color: #f7d106;
+}
+
+/* --- 教室情境視覺化佈局圖 --- */
+.classroom-layout-visualizer {
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 15px;
+    background-color: #f9f9f9;
+    margin-top: 5px;
+}
+
+/* 學生座位區 */
+.seating-chart {
+    display: flex;
+    flex-direction: column; /* 讓每一排垂直排列 */
+    gap: 10px; /* 排與排之間的間距 */
+    margin-bottom: 15px;
+}
+
+.desk-row {
+    display: flex;
+    justify-content: space-around; /* 讓座位在行內均勻分佈 */
+}
+
+.desk {
+    width: 18%; /* 座位的寬度 */
+    height: 25px; /* 座位的高度 */
+    background-color: #e0e0e0;
+    border: 1px solid #b0b0b0;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+}
+
+/* 【關鍵】學生被選中時的樣式 (模擬藍色圓圈效果) */
+.desk.student-active {
+    background-color: #dbeafe; /* 淡藍色背景 */
+    border: 2px solid #3b82f6; /* 醒目的藍色邊框 */
+    transform: scale(1.1); /* 稍微放大，使其突出 */
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.5); /* 藍色光暈效果 */
+}
+
+/* 教師位置區 */
+.teacher-area {
+    border-top: 2px solid #333;
+    padding-top: 10px;
+    text-align: center;
+}
+
+.blackboard-label {
+    font-size: 0.9em;
+    color: #555;
+    margin-bottom: 8px;
+}
+
+.position-zone-wrapper {
+    display: flex;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.position-zone {
+    flex-grow: 1;
+    text-align: center;
+    padding: 8px 12px;
+    background-color: #f0f0f0;
+    color: #333;
+    border-left: 1px solid #ddd;
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.position-zone:first-child {
+    border-left: none;
+}
+
+/* 【關鍵】教師位置被選中時的樣式 */
+.position-zone.teacher-active {
+    background-color: #dc3545; /* 醒目的紅色背景 */
+    color: white;
+    font-weight: bold;
+    border-color: #c82333; /* 讓邊框顏色也變深一些 */
+    /* 新增紅色光暈效果 */
+    box-shadow: 0 0 15px rgba(220, 53, 69, 0.7);
+    transform: scale(1.05); /* 稍微放大，增加視覺突出感 */
+}
+
+/* --- 【新增】教師位置未知狀態的樣式 --- */
+
+/* 1. 定義一個從左到右掃過的光澤動畫 */
+/* 1. 光澤動畫 (不變) */
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+/* 2. 當 wrapper 處於未知狀態時的樣式 (修正版) */
+.position-zone-wrapper.unknown-state {
+    /* 先給一個基礎的灰色背景 */
+    background-color: #e9ecef;
+    /* 然後疊加上我們的動畫光澤 */
+    background-image: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.4) 50%,
+        rgba(255, 255, 255, 0) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2.5s infinite linear;
+}
+
+/* 3. 裡面的區塊樣式 (【【【 關鍵修正 】】】) */
+.position-zone-wrapper.unknown-state .position-zone {
+    /* 讓子元素的背景變透明，這樣才能看到父容器的動畫！ */
+    background-color: transparent; 
+    color: #6c757d;
+    font-weight: normal;
+    /* 也可以讓邊框顏色變淡，整體感更好 */
+    border-color: #d6d8db; 
+}
+
+/* 4. 【新增】狀態文字的樣式 */
+.status-message {
+    font-size: 0.9em;
+    color: #888;
+    font-style: italic;
+    margin-bottom: 8px; /* 和下面的方塊拉開一點距離 */
+    text-align: center;
+}
+
+/* ========================================================================= */
+/* ★★★ 下拉選單 (select) 精緻化樣式 (2025-09-13 新增) ★★★ */
+/* ========================================================================= */
+
+/* --- 1. 美化下拉選單的「外框」 --- */
+/*  targeting both dropdowns in your app */
+#correctBehavior, #annoCorrectBehavior {
+    /* 外觀與佈局 */
+    appearance: none; /* 關鍵：移除瀏覽器預設樣式 */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    display: block;
+    width: 100%;
+    padding: 10px 40px 10px 15px; /* 右側留出空間給自訂箭頭 */
+    border: 1px solid #ced4da;
+    border-radius: 8px; /* 更大的圓角 */
+    background-color: #ffffff;
+    cursor: pointer;
+
+    /* 字體與顏色 */
+    font-size: 1rem;
+    color: #495057;
+    line-height: 1.5;
+
+    /* 動畫效果 */
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+
+    /* 自訂下拉箭頭 */
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 16px 12px;
+}
+
+/* 當使用者點擊(focus)選單時，給予藍色光暈回饋 */
+#correctBehavior:focus, #annoCorrectBehavior:focus {
+    border-color: #86b7fe;
+    outline: 0;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+
+/* --- 2. 美化下拉「列表」中的選項 --- */
+
+/* 讓分類標題 (optgroup) 更突出 */
+optgroup {
+    font-size: 0.9em;
+    font-style: italic;
+    font-weight: bold;
+    color: #0056b3; /* 使用深藍色來區分 */
+    background-color: #f8f9fa; /* 給予一個極淡的背景色 */
+    padding: 5px 0;
+}
+
+/* 讓選項 (option) 更有呼吸感 */
+option {
+    padding: 8px 15px; /* 增加選項的內邊距 */
+    font-weight: normal; /* 確保選項文字不是粗體 */
+    color: #212529;
+}
+
+/* 滑鼠懸停在選項上時，給予回饋 */
+option:hover {
+    background-color: #e9ecef;
+}
+
+/* ========================================================================= */
+/* ★★★ 互動式評分條樣式 (2025-09-13 新增) ★★★ */
+/* ========================================================================= */
+
+.confidence-slider {
+    display: flex;
+    border-radius: 8px;
+    overflow: hidden; /* 確保圓角效果應用到子元素 */
+    border: 1px solid #ddd;
+    margin-top: 5px;
+    cursor: pointer;
+    width: 100%;
+    /* max-width: 400px; 您可以根據版面調整最大寬度 */
+}
+
+.rating-block {
+    flex-grow: 1; /* 讓每個區塊平分寬度 */
+    text-align: center;
+    padding: 10px 0;
+    background-color: #f0f0f0; /* 預設的灰色 */
+    color: #888;
+    font-weight: bold;
+    font-size: 1.1em;
+    border-left: 1px solid #ddd;
+    transition: all 0.2s ease-in-out; /* 平滑的動畫效果 */
+    position: relative;
+}
+
+.rating-block:first-child {
+    border-left: none;
+}
+
+/* --- 互動效果 --- */
+
+/* 1. 滑鼠懸停時的「預覽」效果 */
+.confidence-slider:hover .rating-block.highlight {
+    background-color: #dbeafe; /* 淡藍色 */
+    color: #3b82f6;
+}
+
+/* 2. 被「選中」後的樣式 */
+.rating-block.active {
+    background-color: #007bff; /* 主題藍色 */
+    color: white;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
+}
+
+/* 用來隱藏數字，只在需要時顯示 */
+.rating-block span {
+    opacity: 0.5;
+    transition: opacity 0.2s ease;
+}
+.rating-block.highlight span,
+.rating-block.active span {
+    opacity: 1;
+}
+
+/* ========================================================================= */
+/* ★★★ 主要按鈕美化樣式 (2025-09-13 新增) ★★★ */
+/* ========================================================================= */
+
+/* --- 1. 定義按鈕的基礎樣式 --- */
+/* 我們同時選擇這兩個按鈕 */
+#saveAnnotationBtn, #exportAnnotationsButton {
+    /* 佈局與尺寸 */
+    display: inline-block;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px; /* 與其他元素的圓角保持一致 */
+    
+    /* 字體 */
+    font-size: 1rem;
+    font-weight: bold;
+    color: white; /* 文字顏色為白色 */
+    text-align: center;
+    
+    /* 背景與外觀 */
+    background-color: #007bff; /* 主要操作按鈕的藍色 */
+    cursor: pointer; /* 滑鼠移上去時顯示為手形 */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* 添加細微的立體陰影 */
+    
+    /* 動畫效果 */
+    transition: background-color 0.2s ease-in-out, transform 0.1s ease, box-shadow 0.2s ease;
+}
+
+/* --- 2. 滑鼠懸停 (Hover) 時的互動效果 --- */
+#saveAnnotationBtn:hover, #exportAnnotationsButton:hover {
+    background-color: #0056b3; /* 顏色加深 */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15); /* 陰影加深，有浮起的效果 */
+}
+
+/* --- 3. 按下 (Active) 時的互動效果 --- */
+#saveAnnotationBtn:active, #exportAnnotationsButton:active {
+    background-color: #004494; /* 顏色再加深 */
+    transform: translateY(1px); /* 按鈕輕微下沉，模擬按下的物理效果 */
+    box-shadow: none; /* 按下時移除陰影 */
+}
+
+/* --- 4. 處理「匯出」按鈕的禁用 (Disabled) 狀態 --- */
+#exportAnnotationsButton:disabled {
+    background-color: #c0c0c0; /* 使用灰色表示禁用 */
+    cursor: not-allowed; /* 滑鼠移上去時顯示為禁止符號 */
+    box-shadow: none;
+    color: #666;
+}
+
+.annotation-actions {
+    display: flex;
+    justify-content: center; /* <--- 將值改為 center 即可實現水平置中 */
+    margin-top: 20px;
+}
+
+.annotation-status-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    
+    /* 視覺樣式 */
+    background-color: rgba(40, 167, 69, 0.9); /* 帶有透明度的成功綠色 */
+    color: white;
+    font-size: 1.2em;
+    font-weight: bold;
+    padding: 12px 0;
+    
+    /* 讓內容水平垂直置中 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    /* 動畫效果 */
+    opacity: 0; /* 預設完全透明 */
+    transition: opacity 0.3s ease-in-out;
+    
+    /* 確保底部圓角和容器一致 */
+    border-bottom-left-radius: inherit;
+    border-bottom-right-radius: inherit;
+}
+
+/* 讓 ✓ 符號和文字之間有點間距 */
+.annotation-status-overlay span {
+    margin-left: 8px;
 }

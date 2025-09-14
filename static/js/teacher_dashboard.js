@@ -7,6 +7,13 @@ let behaviorChartInstance = null;
 let taggedImageIdentifiers = new Set();
 const BATCH_SIZE = 50;
 
+let annotationData = {}; 
+let humanAnnotationSessionData = []; 
+let currentAnnotationList = [];
+let currentAnnotationIndex = 0;
+
+let historicalAnnotationData = {};
+
 const ALL_BEHAVIOR_CATEGORIES = [
     "主動舉手",
     "被動舉手",
@@ -33,6 +40,62 @@ const ALL_BEHAVIOR_CATEGORIES = [
     "玩弄手部/文具",
     "被遮擋/無法判斷"
 ];
+
+/**
+ * @description 新的、帶有分類的行為數據結構。
+ * 用於生成帶有 <optgroup> 的分組下拉選單，提升標註體驗。
+ */
+const BEHAVIOR_CATEGORIES_GROUPED = {
+    "視線 (Gaze)": [
+        "目視教師", "目視黑板", "目視書本/筆記", "目視同學", "目視他處"
+    ],
+    "肢體(手部) (Hand)": [
+        "做筆記", "翻書", "觸摸臉部", "觸摸頭髮"
+    ],
+    "身體姿態 (Posture)": [
+        "坐姿直立", "身體前傾", "身體後靠", "低頭(非學習)", "趴睡", "托腮"
+    ],
+    "互動 (Interaction)": [
+        "主動舉手", "被動舉手"
+    ],
+    "其他狀態 (Other)": [
+        "喝水", "飲食", "玩弄手部/文具", "被遮擋/無法判斷"
+    ]
+};
+
+/**
+ * @description 【全新函數】一個新的下拉選單填充函數。
+ * 它會讀取 BEHAVIOR_CATEGORIES_GROUPED 數據，並生成帶有分類標題的分組下拉選單。
+ * @param {HTMLSelectElement} selectElement - 需要被填充的 <select> DOM 元素。
+ */
+function populateGroupedBehaviorDropdown(selectElement) {
+    if (!selectElement) {
+        console.error("錯誤：傳入 populateGroupedBehaviorDropdown 的 selectElement 為空！");
+        return;
+    }
+    selectElement.innerHTML = ''; // 開始前先清空
+
+    // 遍歷我們定義好的分類物件
+    for (const categoryName in BEHAVIOR_CATEGORIES_GROUPED) {
+        // 1. 為每個分類創建一個 <optgroup> 元素
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = `--- ${categoryName} ---`; // 設置分類標題，加上分隔線更清晰
+
+        // 2. 遍歷該分類下的所有行為
+        const behaviors = BEHAVIOR_CATEGORIES_GROUPED[categoryName];
+        behaviors.forEach(behaviorLabel => {
+            // 3. 為每個行為創建 <option>
+            const option = document.createElement('option');
+            option.value = behaviorLabel;
+            option.textContent = behaviorLabel;
+            // 4. 將 <option> 加入到 <optgroup> 中
+            optgroup.appendChild(option);
+        });
+
+        // 5. 最後將整個 <optgroup> 加入到下拉選單中
+        selectElement.appendChild(optgroup);
+    }
+}
 
 // --- 輔助函數 ---
 function escapeHtmlJs(unsafe) {
@@ -496,20 +559,72 @@ document.addEventListener('DOMContentLoaded', function() {
     const saveTagButton = document.getElementById('saveTagButton');
     const correctBehaviorSelect = document.getElementById('correctBehavior');
 
+    // 【新增】獲取校準工作台相關的DOM元素
+    const annotationWorkbenchTab = document.getElementById('annotationWorkbenchTab');
+    const annotationStudentList = document.getElementById('annotationStudentList');
+    const annotationInterface = document.getElementById('annotationInterface');
+    const annotationPlaceholder = document.getElementById('annotationPlaceholder');
+    const prevImageBtn = document.getElementById('prevImageBtn');
+    const nextImageBtn = document.getElementById('nextImageBtn');
+    const saveAnnotationBtn = document.getElementById('saveAnnotationBtn');
+    const exportAnnotationsButton = document.getElementById('exportAnnotationsButton');
+    const annoCorrectBehaviorSelect = document.getElementById('annoCorrectBehavior');
+
+
+    // --- START: 互動式評分條初始化 ---
+    const confidenceSlider = document.getElementById('confidenceSlider');
+    if (confidenceSlider) {
+        const ratingBlocks = confidenceSlider.querySelectorAll('.rating-block');
+
+        // 滑鼠移入區塊時，高亮自己以及之前的所有區塊
+        ratingBlocks.forEach(block => {
+            block.addEventListener('mouseover', () => {
+                const hoverValue = parseInt(block.dataset.value);
+                ratingBlocks.forEach(b => {
+                    const value = parseInt(b.dataset.value);
+                    b.classList.toggle('highlight', value <= hoverValue);
+                });
+            });
+        });
+
+        // 滑鼠移出整個評分條時，恢復到上次點擊的狀態
+        confidenceSlider.addEventListener('mouseout', () => {
+            const selectedValue = parseInt(confidenceSlider.dataset.selectedValue) || 0;
+            ratingBlocks.forEach(b => {
+                const value = parseInt(b.dataset.value);
+                b.classList.remove('highlight');
+                if (value <= selectedValue) {
+                    b.classList.add('highlight');
+                }
+            });
+        });
+
+        // 點擊區塊時，設定最終選中的狀態
+        ratingBlocks.forEach(block => {
+            block.addEventListener('click', () => {
+                const clickedValue = block.dataset.value;
+                confidenceSlider.dataset.selectedValue = clickedValue; // 將選中的值存在容器的 dataset 中
+
+                ratingBlocks.forEach(b => {
+                    b.classList.remove('active');
+                });
+                block.classList.add('active');
+            });
+        });
+    }
+
     // --- 初始化頁面 ---
     async function initializePage() {
-        // 【關鍵修改】非同步地從後端 API 載入歷史標註紀錄
+        // 1. 異步獲取歷史標註數據 (這部分邏輯不變)
         try {
             const response = await fetch('/api/teacher/get_calibrations');
             if (!response.ok) throw new Error('無法獲取歷史標註');
             
             const historicalTags = await response.json();
             
-            // 從返回的詳細數據中，構建出用於 UI 判斷的 ID 集合
             const historicalIds = historicalTags.map(tag => {
-                // 從 tag.source_report 和 tag.image_path 中重建 uniqueId
                 const reportFilename = tag.source_report;
-                const imageFilename = tag.image_path.split('\\').pop(); // 從路徑中提取檔名
+                const imageFilename = tag.image_path.split('\\').pop();
                 return `${reportFilename}-${imageFilename}`;
             });
 
@@ -518,22 +633,34 @@ document.addEventListener('DOMContentLoaded', function() {
 
         } catch (e) {
             console.error("從伺服器讀取標註紀錄失敗:", e);
-            taggedImageIdentifiers = new Set(); // 出錯時重置
+            taggedImageIdentifiers = new Set();
         }
-    
+
+        // 2. 初始化UI狀態
         tabContents.forEach(tab => tab.style.display = 'none');
         loadReportButton.disabled = true;
-        populateBehaviorDropdown();
+
+        // 3. 【修正】為兩個不同的下拉選單分別填充行為選項
+        populateBehaviorDropdown(correctBehaviorSelect); // 填充舊的「聚焦模式」下拉選單
+        populateGroupedBehaviorDropdown(annoCorrectBehaviorSelect); // 填充新的「校準工作台」下拉選單
+
+        // 4. 開始獲取報告日期
         fetchAvailableDates();
     }
     
     // --- 新增：填充行為下拉選單 ---
-    function populateBehaviorDropdown() {
-        ALL_BEHAVIOR_CATEGORIES.forEach(cat => {
+    function populateBehaviorDropdown(selectElement) {
+        if (!selectElement) return; // 安全檢查
+        selectElement.innerHTML = ''; // 先清空
+
+        // 使用 Set 去除 ALL_BEHAVIOR_CATEGORIES 中的重複項
+        const uniqueBehaviors = [...new Set(ALL_BEHAVIOR_CATEGORIES)];
+
+        uniqueBehaviors.forEach(cat => {
             const option = document.createElement('option');
             option.value = cat;
             option.textContent = cat;
-            correctBehaviorSelect.appendChild(option);
+            selectElement.appendChild(option);
         });
     }
 
@@ -575,8 +702,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function loadReportData() {
         let selectedDate = dateSelector.value;
         if (selectedDate === "" && dateSelector.options.length > 1) {
-            selectedDate = dateSelector.options[1].value;
-            dateSelector.value = selectedDate; // 同步更新下拉選單的顯示
+            selectedDate = dateSelector.options[1] ? dateSelector.options[1].value : dateSelector.options[0].value;
+            dateSelector.value = selectedDate;
         }
 
         if (!selectedDate) {
@@ -584,46 +711,43 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // 【修改點 1.1】新增 comprehensiveApiUrl
         const summaryApiUrl = `/api/teacher/all_students_activity_summary?date=${selectedDate}`;
         const behaviorApiUrl = `/api/teacher/behavior_summary_by_date?date=${selectedDate}`;
         const comprehensiveApiUrl = `/api/teacher/get_comprehensive_report_by_date?date=${selectedDate}`;
+        const samplingApiUrl = `/api/teacher/get_sampled_images_for_annotation?date=${selectedDate}`;
 
-        // 更新 UI 狀態
         loadingMessage.style.display = 'block';
         loadingMessage.textContent = `正在查詢 ${selectedDate} 的報告數據...`;
         errorMessage.style.display = 'none';
         tabContents.forEach(tab => tab.style.display = 'none');
         document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
 
-        // 【修改點 1.2】使用 Promise.all 一次性獲取所有三份數據
         Promise.all([
-            fetch(summaryApiUrl).then(res => {
-                if (!res.ok) return Promise.reject({ response: res, message: `API Error: ${summaryApiUrl}` });
-                return res.json();
-            }),
-            fetch(behaviorApiUrl).then(res => {
-                if (!res.ok) return Promise.reject({ response: res, message: `API Error: ${behaviorApiUrl}` });
-                return res.json();
-            }),
-            fetch(comprehensiveApiUrl).then(res => {
-                if (!res.ok) return Promise.reject({ response: res, message: `API Error: ${comprehensiveApiUrl}` });
-                return res.json();
-            })
+            fetch(summaryApiUrl).then(res => res.ok ? res.json() : Promise.reject(new Error(`API Error: ${summaryApiUrl}`))),
+            fetch(behaviorApiUrl).then(res => res.ok ? res.json() : Promise.reject(new Error(`API Error: ${behaviorApiUrl}`))),
+            fetch(comprehensiveApiUrl).then(res => res.ok ? res.json() : Promise.reject(new Error(`API Error: ${comprehensiveApiUrl}`))),
+            fetch(samplingApiUrl).then(res => res.ok ? res.json() : Promise.reject(new Error(`API Error: ${samplingApiUrl}`)))
         ])
-        .then(([summaryData, behaviorData, comprehensiveData]) => {
+        .then(([summaryData, behaviorData, comprehensiveData, sampledAndHistoryData]) => { 
+            // 檢查各 API 是否返回錯誤
             if (summaryData.error) throw new Error(summaryData.error);
             if (behaviorData.error) throw new Error(behaviorData.error);
             if (comprehensiveData.error) throw new Error(comprehensiveData.error);
+            if (sampledAndHistoryData.error) throw new Error(sampledAndHistoryData.error);
             
-            allStudentData = summaryData;
+            // 【核心修改】將後端返回的整合數據拆分並存入全局變量
+            const sampledData = sampledAndHistoryData.sampled_images;
+            historicalAnnotationData = sampledAndHistoryData.historical_annotations;
+
+            // 將 annotationData 指向抽樣出的圖片列表，供後續使用
+            annotationData = sampledData; 
             
-            // 【修改點 1.3】調用主渲染函數，傳入所有獲取到的數據
-            renderAllTabs(summaryData, behaviorData, comprehensiveData);
+            // 將拆分後的抽樣數據 (sampledData) 傳遞給渲染函數
+            renderAllTabs(summaryData, behaviorData, comprehensiveData, sampledData);
 
             loadingMessage.style.display = 'none';
             
-            // 【修改點 1.4】預設打開「課堂綜合洞察」頁籤，並設置其按鈕為 active
+            // 預設打開第一個頁籤
             document.getElementById('webActivityTab').style.display = 'block';
             document.querySelector('.tab-button[onclick*="webActivityTab"]').classList.add('active');
         })
@@ -649,17 +773,384 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // --- 數據渲染主函數 ---
-    function renderAllTabs(summaryData, behaviorData, comprehensiveData) {
-        // 【新增】渲染新的綜合洞察頁籤
-        populateComprehensiveReportTab(comprehensiveData); 
-        
-        // 調用所有舊頁籤的渲染
+    function renderAllTabs(summaryData, behaviorData, comprehensiveData, sampledData) { // 【修正】接收第四個參數 sampledData
+        // 渲染所有舊的頁籤 (這部分不變)
         populateWebActivityTab(summaryData);
         populateBehaviorStatsTab(summaryData);
         populateImageExplorerTab(summaryData);
         populateCrossStudentTab(behaviorData);
+        populateComprehensiveReportTab(comprehensiveData); 
+        
+        // 【修正】將抽樣數據 (sampledData) 傳遞給新的渲染函數
+        populateAnnotationWorkbenchTab(sampledData); 
     }
     // --- 新增：聚焦與標註相關的所有函數 ---
+
+    function populateAnnotationWorkbenchTab(data) {
+        annotationStudentList.innerHTML = '';
+        humanAnnotationSessionData = []; // 重置本輪會話數據
+        updateAnnotationCount(); // 更新計數器為 0
+
+        if (!data || Object.keys(data).length === 0) {
+            const li = document.createElement('li');
+            li.textContent = '此日期無待標註影像';
+            li.className = 'disabled';
+            annotationStudentList.appendChild(li);
+            // 確保標註介面是隱藏的
+            annotationInterface.style.display = 'none';
+            annotationPlaceholder.style.display = 'block';
+            return;
+        }
+
+        // 恢復介面到初始狀態
+        annotationInterface.style.display = 'none';
+        annotationPlaceholder.style.display = 'block';
+
+        for (const studentName in data) {
+            const images = data[studentName];
+            const li = document.createElement('li');
+            // 顯示總圖片數
+            li.textContent = `${studentName} (${images.length} 張)`;
+            li.dataset.studentName = studentName;
+            
+            li.onclick = () => {
+                // 移除其他學生的 'active' class
+                document.querySelectorAll('#annotationStudentList li.active').forEach(el => el.classList.remove('active'));
+                // 為當前點擊的學生添加 'active' class
+                li.classList.add('active');
+                
+                // 呼叫啟動函數
+                startAnnotationForStudent(studentName, images);
+            };
+            annotationStudentList.appendChild(li);
+        }
+}
+    /**
+     * @description 【重新補回的函數】當使用者點擊學生列表時，啟動該學生的標註工作流程。
+     * @param {string} studentName - 被選中的學生姓名。
+     * @param {Array} images - 該學生的待標註圖片列表。
+     */
+    function startAnnotationForStudent(studentName, images) {
+        // 1. 設定當前要標註的圖片列表和起始索引
+        currentAnnotationList = images;
+        currentAnnotationIndex = 0;
+
+        // 2. 切換介面顯示：隱藏提示文字，顯示標註主介面
+        annotationPlaceholder.style.display = 'none';
+        annotationInterface.style.display = 'block';
+
+        // 3. 更新介面上的學生姓名
+        document.getElementById('annotationStudentName').textContent = `正在標註: ${studentName}`;
+        
+        // 4. 呼叫 displayAnnotationImage 來顯示第一張圖片
+        displayAnnotationImage(currentAnnotationIndex);
+    }
+    
+    // --- 【全新函數】開始為特定學生標註 ---
+    async function displayAnnotationImage(index) {
+        // 1. 基本檢查與變數設定
+        if (index < 0 || index >= currentAnnotationList.length) return;
+
+        const imageData = currentAnnotationList[index];
+        const imageEl = document.getElementById('annotationImage');
+        const statusOverlay = document.getElementById('annotationStatusOverlay'); // 獲取狀態覆蓋層元素
+        
+        document.getElementById('annotationProgress').textContent = `影像 ${index + 1} / ${currentAnnotationList.length}`;
+        imageEl.src = ""; 
+
+        // 在函數開頭，總是先隱藏覆蓋層，為動畫做準備
+        if (statusOverlay) {
+            statusOverlay.style.opacity = '0';
+            // 使用 setTimeout 確保在下一次顯示前，display 屬性不會阻礙動畫
+            setTimeout(() => { if (statusOverlay.style.opacity === '0') statusOverlay.style.display = 'none'; }, 300);
+        }
+
+        // 2. 定義更新教室情境圖的輔助函數
+        const updateClassroomLayout = (studentPos, teacherPos) => {
+            const teacherAreaWrapper = document.querySelector('.position-zone-wrapper');
+            const statusMessage = document.getElementById('teacherPositionStatus');
+            if (!teacherAreaWrapper || !statusMessage) {
+                console.error("錯誤：找不到教室佈局圖的必要元素！");
+                return;
+            }
+
+            // 重置所有狀態
+            document.querySelectorAll('.desk.student-active').forEach(d => d.classList.remove('student-active'));
+            document.querySelectorAll('.position-zone.teacher-active').forEach(z => z.classList.remove('teacher-active'));
+            teacherAreaWrapper.classList.remove('unknown-state');
+            statusMessage.style.display = 'none';
+
+            // 處理學生位置
+            if (studentPos && studentPos !== '未知' && studentPos !== '獲取失敗') {
+                const rowMap = { '一': '1', '二': '2', '三': '3', '四': '4', '五': '5' };
+                const colMap = { '左邊': 'left', '中間': 'center', '右邊': 'right' };
+                const match = studentPos.match(/第?(\S)排(\S+)/);
+                if (match) {
+                    const row = rowMap[match[1]], col = colMap[match[2]];
+                    if (row && col) {
+                        const studentDesk = document.querySelector(`.desk[data-position="${row}-${col}"]`);
+                        if (studentDesk) studentDesk.classList.add('student-active');
+                    }
+                }
+            }
+
+            // 處理教師位置
+            const perspectiveMap = { "右": "左", "中間偏右": "偏左", "中": "中", "中間": "中", "中間偏左": "偏右", "左": "右" };
+            const mappedPosition = teacherPos ? perspectiveMap[teacherPos] : null;
+            
+            if (mappedPosition) {
+                const teacherZone = document.querySelector(`.position-zone[data-position="${mappedPosition}"]`);
+                if (teacherZone) teacherZone.classList.add('teacher-active');
+            } else {
+                teacherAreaWrapper.classList.add('unknown-state');
+                statusMessage.textContent = '教師位置資訊無法判斷';
+                statusMessage.style.display = 'block';
+            }
+        };
+
+        // 3. 定義更新互動式評分條的輔助函數
+        const setSliderValue = (value) => {
+            const confidenceSlider = document.getElementById('confidenceSlider');
+            if (!confidenceSlider) return;
+
+            const ratingBlocks = confidenceSlider.querySelectorAll('.rating-block');
+            const numericValue = parseInt(value) || 0;
+            
+            confidenceSlider.dataset.selectedValue = numericValue;
+            
+            ratingBlocks.forEach(b => {
+                const blockValue = parseInt(b.dataset.value);
+                b.classList.toggle('active', blockValue === numericValue);
+                b.classList.toggle('highlight', blockValue <= numericValue && blockValue > 0);
+            });
+        };
+
+        // 4. 異步獲取上下文資訊並更新 UI
+        let contextData = {};
+        try {
+            updateClassroomLayout(null, null);
+            const response = await fetch(`/api/teacher/get_image_context?report_file=${encodeURIComponent(imageData.report_filename)}&image_file=${encodeURIComponent(imageData.image_filename)}`);
+            contextData = response.ok ? await response.json() : {};
+            updateClassroomLayout(contextData.seating_position, contextData.teacher_position);
+        } catch (e) {
+            updateClassroomLayout('獲取失敗', '獲取失敗');
+        }
+
+        // 5. 加載主要圖片
+        imageEl.src = `/api/get_sequence_image?report_file=${encodeURIComponent(imageData.report_filename)}&image_file=${encodeURIComponent(imageData.image_filename)}`;
+        
+        // 6. 檢查圖片是否已標註過，並更新表單和狀態標籤
+        const imageFullPath = buildImagePath(imageData, contextData);
+        const sessionAnnotation = humanAnnotationSessionData.find(item => item.image_path === imageFullPath);
+        const historicalAnnotation = historicalAnnotationData[imageFullPath];
+        const finalAnnotation = sessionAnnotation || historicalAnnotation;
+
+        if (finalAnnotation) {
+            // 如果找到了標註，載入其內容
+            annoCorrectBehaviorSelect.value = finalAnnotation.corrected_behavior;
+            setSliderValue(finalAnnotation.calibration_confidence);
+
+            // 【核心修改：顯示「已校準」覆蓋層】
+            if (statusOverlay) {
+                statusOverlay.style.display = 'flex'; // 先讓它在 DOM 中可見
+                // 使用一個微小的延遲來確保瀏覽器渲染了 display 屬性的變化，從而觸發 opacity 的過渡動畫
+                setTimeout(() => {
+                    statusOverlay.style.opacity = '1';
+                }, 10);
+            }
+
+        } else {
+            // 如果沒有任何標註，重置表單
+            annoCorrectBehaviorSelect.value = imageData.original_behavior;
+            setSliderValue(null);
+        }
+
+        // 7. 更新導航按鈕的狀態
+        prevImageBtn.disabled = index === 0;
+        nextImageBtn.disabled = index === currentAnnotationList.length - 1;
+    }
+    
+    /**
+     * 儲存當前正在標註的圖片資訊。這是一個異步函數。
+     * @returns {Promise<boolean>} - 成功儲存則返回 true，失敗則返回 false。
+     */
+    async function saveCurrentAnnotation() {
+        const selectedBehavior = annoCorrectBehaviorSelect.value;
+        // 【【【 核心修正點 】】】
+        // 從評分條的 dataset 中獲取選中的值
+        const confidenceRating = document.getElementById('confidenceSlider')?.dataset.selectedValue;
+
+        if (!confidenceRating || confidenceRating === "0") { // 增加一個檢查，確保使用者有點擊
+            alert('請評估您此次標註的信度！');
+            return false;
+        }
+
+        const imageData = currentAnnotationList[currentAnnotationIndex];
+        let fullContextData = {};
+        try {
+            const response = await fetch(`/api/teacher/get_image_context?report_file=${encodeURIComponent(imageData.report_filename)}&image_file=${encodeURIComponent(imageData.image_filename)}`);
+            if (response.ok) {
+                fullContextData = await response.json();
+            }
+        } catch (e) {
+            console.error("獲取上下文時出錯:", e);
+        }
+        
+        const imageFullPath = buildImagePath(imageData, fullContextData);
+        if (!imageFullPath) {
+            alert("錯誤：無法建構有效的圖片路徑，標註無法儲存。");
+            return false;
+        }
+
+        const existingIndex = humanAnnotationSessionData.findIndex(item => item.image_path === imageFullPath);
+
+        const annotationObject = {
+            image_path: imageFullPath,
+            original_behavior: imageData.original_behavior,
+            corrected_behavior: selectedBehavior,
+            // error_rating: 0, // 這個欄位在校準工作台中似乎不再需要，可以考慮移除
+            calibration_confidence: parseInt(confidenceRating),
+            student_name: imageData.student_name,
+            source_report: imageData.report_filename,
+            timestamp: new Date().toISOString(),
+            context: {
+                teacher_position: fullContextData.teacher_position || "未知",
+                classroom_subject: fullContextData.classroom_subject || "未知",
+                seating_position: fullContextData.seating_position || "未知",
+                original_ai_reasoning: fullContextData.original_ai_reasoning || "未找到",
+                original_ai_confidence: fullContextData.original_ai_confidence || 0.0,
+                batch_context: fullContextData.batch_context || null,
+                ai_model_version: fullContextData.ai_model_version || null
+            }
+        };
+
+        if (existingIndex > -1) {
+            humanAnnotationSessionData[existingIndex] = annotationObject;
+        } else {
+            humanAnnotationSessionData.push(annotationObject);
+        }
+        
+        updateAnnotationCount();
+        return true;
+    }
+
+    /**
+     * 根據圖片的基礎資訊和從API獲取的上下文，穩健地建構圖片的絕對路徑。
+     * @param {object} imageData - 包含 report_filename, image_filename, student_name 的物件。
+     * @param {object} contextData - 從 /api/teacher/get_image_context 返回的物件。
+     * @returns {string|null} - 成功則返回完整的圖片路徑，失敗則返回 null。
+     */
+    function buildImagePath(imageData, contextData) {
+        // 優先使用從 context API 獲取的權威元數據，因為這最準確
+        const dateStr = contextData.report_date_internal; // e.g., "08/24"
+        const studentNum = contextData.student_number;
+
+        if (dateStr && studentNum && dateStr !== "unknown" && studentNum !== "unknown") {
+            const dateFolder = dateStr.replace('/', '');
+            const studentIdFolder = `ID_${studentNum}`;
+            return `C:\\Users\\User\\Desktop\\test\\student_week_photo\\${dateFolder}\\${studentIdFolder}\\Keyframes\\${imageData.image_filename}`.replace(/\//g, '\\');
+        }
+        
+        // 如果 API 獲取失敗，則退回到從檔名解析（作為備用方案）
+        console.warn("Context API 未返回日期或座號，退回到從檔名推斷路徑。");
+        const dateMatch = imageData.report_filename.match(/_(\d{4})(\d{2})(\d{2})_/);
+        if (dateMatch) {
+            const dateFolder = dateMatch[2] + dateMatch[3]; // MM DD
+            // 注意：這裡無法直接獲取座號，只能用學生姓名，這在某些情況下可能不準確
+            const studentIdFolder = `ID_${imageData.student_name}`; 
+            return `C:\\Users\\User\\Desktop\\test\\student_week_photo\\${dateFolder}\\${studentIdFolder}\\Keyframes\\${imageData.image_filename}`.replace(/\//g, '\\');
+        }
+
+        console.error("致命錯誤：無法建構圖片路徑，兩種方法都失敗了。", {imageData, contextData});
+        return null; // 如果兩種方法都失敗，返回 null
+    }
+    // --- 【全新函數】更新標註計數器 ---
+    function updateAnnotationCount() {
+        // --- Part 1: 更新舊的「聚焦模式」計數器 ---
+        const exportButton = document.getElementById('exportButton');
+        const tagCountSpan = document.getElementById('tagCount'); // 直接獲取計數器元素
+
+        // 【關鍵修正】確保按鈕和計數器元素都存在才執行更新
+        if (exportButton && tagCountSpan) {
+            const count = taggingSessionData.length;
+            tagCountSpan.textContent = count;
+            exportButton.disabled = count === 0;
+        }
+
+        // --- Part 2: 更新新的「校準工作台」計數器 ---
+        const exportAnnotationsButton = document.getElementById('exportAnnotationsButton');
+        const annotationCountSpan = document.getElementById('annotationCount'); // 直接獲取計數器元素
+
+        // 【關鍵修正】同樣，確保兩個相關元素都存在
+        if (exportAnnotationsButton && annotationCountSpan) {
+            const count = humanAnnotationSessionData.length;
+            annotationCountSpan.textContent = count;
+            exportAnnotationsButton.disabled = count === 0;
+        }
+    }
+
+    // --- 【全新函數】匯出人工標註數據 ---
+    function exportHumanAnnotations() {
+        if (humanAnnotationSessionData.length === 0) return;
+
+        exportAnnotationsButton.textContent = '正在匯出...';
+        exportAnnotationsButton.disabled = true;
+
+        fetch('/api/teacher/export_human_annotations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(humanAnnotationSessionData),
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                humanAnnotationSessionData = []; // 成功後清空
+                updateAnnotationCount();
+            } else {
+                throw new Error(data.message || '未知錯誤');
+            }
+        })
+        .catch(err => {
+            alert(`匯出失敗: ${err.message}`);
+        })
+        .finally(() => {
+            exportAnnotationsButton.innerHTML = `匯出本次標註數據 (<span id="annotationCount">${humanAnnotationSessionData.length}</span>)`;
+            exportAnnotationsButton.disabled = humanAnnotationSessionData.length === 0;
+        });
+    }
+
+    prevImageBtn.addEventListener('click', async () => { // 1. 加上 async
+        if (currentAnnotationIndex > 0) {
+            // 在切換前，如果用戶已經評分，則嘗試自動儲存
+            if (document.querySelector('#annoConfidenceRating input:checked')) {
+                await saveCurrentAnnotation(); // 2. 使用 await 等待儲存完成
+            }
+            currentAnnotationIndex--;
+            displayAnnotationImage(currentAnnotationIndex);
+        }
+    });
+
+    nextImageBtn.addEventListener('click', async () => { // 1. 加上 async
+        if (currentAnnotationIndex < currentAnnotationList.length - 1) {
+            // 在切換前，如果用戶已經評分，則嘗試自動儲存
+            if (document.querySelector('#annoConfidenceRating input:checked')) {
+                await saveCurrentAnnotation(); // 2. 使用 await 等待儲存完成
+            }
+            currentAnnotationIndex++;
+            displayAnnotationImage(currentAnnotationIndex);
+        }
+    });
+
+    saveAnnotationBtn.addEventListener('click', async () => { // 1. 加上 async
+        // 2. 使用 await 等待儲存完成，並根據返回的 true/false 決定是否提示
+        const isSuccess = await saveCurrentAnnotation(); 
+        if (isSuccess) {
+            alert(`已儲存影像 ${currentAnnotationIndex + 1} 的標註！`);
+        }
+    });
+
+    exportAnnotationsButton.addEventListener('click', exportHumanAnnotations);
     
     // 進入聚焦模式
     async function enterFocusMode(dataset, element) {
@@ -738,21 +1229,19 @@ document.addEventListener('DOMContentLoaded', function() {
         // 2. 獲取教師在表單中的輸入
         const rating = document.querySelector('#errorRating input[name="rating"]:checked')?.value;
         const correctBehavior = correctBehaviorSelect.value;
-        // 【【【新增】】】 獲取教師對自己校準的信度評分
         const calibrationConfidence = document.querySelector('#calibrationConfidence input[name="cal_rating"]:checked')?.value;
 
-        // 3. 驗證是否有選擇評分
+        // 3. 驗證輸入
         if (!rating) {
             alert('請選擇 AI 的「錯誤程度」評分！');
             return;
         }
-        // 【【【新增】】】 驗證教師信度評分
         if (!calibrationConfidence) {
             alert('請評估您此次校準的「信度」！');
             return;
         }
 
-        // --- 【核心修正邏輯開始】--- (這部分邏輯不變)
+        // 4. 建構圖片路徑 (邏輯不變)
         let dateFolder = "unknown_date";
         if (fullDataset.report_date_internal && fullDataset.report_date_internal !== "unknown") {
             dateFolder = fullDataset.report_date_internal.replace('/', '');
@@ -762,15 +1251,14 @@ document.addEventListener('DOMContentLoaded', function() {
             studentIdFolder = `ID_${fullDataset.student_number}`;
         }
         const imageFullPath = `C:\\Users\\User\\Desktop\\test\\student_week_photo\\${dateFolder}\\${studentIdFolder}\\Keyframes\\${fullDataset.imageFilename}`;
-        // --- 【核心修正邏輯結束】---
 
-        // 7. 【【【修改】】】 構建準備匯出的 JSON 物件，增加新欄位
+        // 5. 構建準備匯出的 JSON 物件 (邏輯不變)
         const tagObject = {
             image_path: imageFullPath.replace(/\//g, '\\'),
             original_behavior: fullDataset.originalBehavior,
             corrected_behavior: correctBehavior,
             error_rating: parseInt(rating),
-            calibration_confidence: parseInt(calibrationConfidence), // 【【【新增欄位】】】
+            calibration_confidence: parseInt(calibrationConfidence),
             student_name: fullDataset.studentName,
             source_report: fullDataset.reportFilename,
             timestamp: new Date().toISOString(),
@@ -785,19 +1273,31 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         };
         
-        // 8. 更新前端的狀態和 UI (不變)
+        // 6. 更新前端的狀態和 UI
         taggingSessionData.push(tagObject);
         taggedImageIdentifiers.add(fullDataset.uniqueId);
-        document.getElementById('tagCount').textContent = taggingSessionData.length;
-        exportButton.disabled = false;
+        
+        // 【【【 關鍵修正點 】】】
+        // 呼叫專屬於舊版匯出按鈕的計數器更新函數
+        updateTagCount(); 
         
         const originalImageWrapper = focusOverlay.currentTargetElement; 
         if (originalImageWrapper) {
             originalImageWrapper.classList.add('tagged');
         }
 
-        // 9. 退出聚焦模式 (不變)
+        // 7. 退出聚焦模式
         exitFocusMode();
+    }
+
+    function updateTagCount() {
+        const exportButton = document.getElementById('exportButton');
+        // 安全檢查：如果按鈕不存在於當前頁面，則不執行任何操作
+        if (!exportButton) return;
+
+        const count = taggingSessionData.length;
+        document.getElementById('tagCount').textContent = count;
+        exportButton.disabled = count === 0;
     }
 
     // 匯出數據到後端
@@ -845,6 +1345,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- 事件監聽 ---
     loadReportButton.addEventListener('click', loadReportData);
+    dateSelector.addEventListener('change', loadReportData);
     exportButton.addEventListener('click', exportTags);
     closeFocusBtn.addEventListener('click', exitFocusMode);
     saveTagButton.addEventListener('click', saveTag);
