@@ -17,13 +17,13 @@ from transformers import CLIPProcessor, CLIPModel
 # --- 核心配置區 (所有設定都在此完成) ---
 # ==========================================================================
 # 1. 報告日期設定
-REPORT_DATE_STRING = "07/13"
+REPORT_DATE_STRING = "09/07"
 
 # 2. 要分析的日期 (對應資料夾名稱)
-ANALYSIS_DATE_MMDD = "0713"
+ANALYSIS_DATE_MMDD = "0907"
 
 # 3. 學生照片起始時間 (HH:MM:SS)
-START_TIME_OFFSET_CENTER = "00:02:46"
+START_TIME_OFFSET_CENTER = "00:00:00"
 START_TIME_OFFSET_LEFT   = "00:00:00"
 START_TIME_OFFSET_RIGHT  = "00:00:00"
 
@@ -46,10 +46,10 @@ PHOTO_BASE_FOLDER = r'C:\Users\User\Desktop\test\student_week_photo'
 # --- 輔助資料的【完整路徑】---
 CLASSROOM_VIEW_FOLDER = rf'C:\Users\User\Desktop\test\student_full_classroom\{ANALYSIS_DATE_MMDD}_english_class'
 # TEACHER_POS_JSON = rf'C:\Users\User\Desktop\test\teacher_position\{ANALYSIS_DATE_MMDD}_position.json'。
-TEACHER_POS_JSON = rf'C:\Users\User\Desktop\test\teacher_position\0720_position.json'
+TEACHER_POS_JSON = rf'C:\Users\User\Desktop\test\teacher_position\0907_position.json'
 
 # CLASSROOM_STATE_JSON = rf'C:\Users\User\Desktop\test\SynologyDrive\image\上課影片\{ANALYSIS_DATE_MMDD}\老師\TXT\{ANALYSIS_DATE_MMDD}.json'
-CLASSROOM_STATE_JSON = rf'C:\Users\User\Desktop\test\SynologyDrive\image\上課影片\0720\老師上課\TXT\0720.json'
+CLASSROOM_STATE_JSON = rf'C:\Users\User\Desktop\test\SynologyDrive\image\上課影片\0907\老師\TXT\0907.json'
 
 # ==========================================================================
 # --- 輔助函數 (無需修改) ---

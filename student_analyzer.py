@@ -16,6 +16,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import bisect
 import torch
 import chromadb
+import bisect
 
 
 SAMPLING_RATE = 3  
@@ -1219,33 +1220,43 @@ def find_closest_image_path(representative_timestamp, sorted_photo_list, max_tim
     
     return None
 
-def find_closest_position(representative_timestamp, sorted_position_list, max_time_diff_seconds=10):
+def find_closest_position(representative_timestamp, sorted_position_list, max_time_diff_seconds=None):
     """
-    用二分查找法在排序好的位置列表中找到時間最接近的老師位置。
+    【v3.0 - "超出範圍兼容版"】
+    根據時間戳，查找在這之前最後一個被記錄到的、有效的老師位置。
+    此版本能處理時間戳超出 position.json 範圍的邊界情況。
     """
     if not sorted_position_list:
         return "未知"
 
-    all_timestamps = [item[0] for item in sorted_position_list]
-    insertion_point = bisect.bisect_left(all_timestamps, representative_timestamp)
+    # 步驟 1: 預先過濾掉所有 "未偵測到" 的無效紀錄，只留下有效的
+    valid_positions = [item for item in sorted_position_list if item[1] and item[1] != "未偵測到"]
 
-    closest_position = "未知"
-    min_diff = datetime.timedelta.max
+    # 如果過濾後沒有任何有效位置，直接返回 "未知"
+    if not valid_positions:
+        return "未知"
+        
+    # 只用有效位置的時間戳進行查找
+    valid_timestamps = [item[0] for item in valid_positions]
 
-    start_index = max(0, insertion_point - 2)
-    end_index = min(len(sorted_position_list), insertion_point + 2)
+    # --- 步驟 2: 處理超出範圍的邊界情況 ---
+    # 情況 A: 學生照片時間戳比最早的有效老師紀錄還早
+    if representative_timestamp < valid_timestamps[0]:
+        # 直接使用【第一條】有效紀錄的位置
+        return valid_positions[0][1]
 
-    for i in range(start_index, end_index):
-        candidate_ts, candidate_pos = sorted_position_list[i]
-        diff = abs(candidate_ts - representative_timestamp)
-        if diff < min_diff:
-            min_diff = diff
-            closest_position = candidate_pos
-    
-    if min_diff.total_seconds() <= max_time_diff_seconds:
-        return closest_position
-    
-    return "未知"
+    # 情況 B: 學生照片時間戳比最晚的有效老師紀錄還晚
+    if representative_timestamp > valid_timestamps[-1]:
+        # 直接使用【最後一條】有效紀錄的位置
+        return valid_positions[-1][1]
+
+    # --- 步驟 3: 處理在範圍內的常規情況 (向前填充) ---
+    # 使用 bisect_right 找到代表性時間戳應該插入的位置
+    insertion_point = bisect.bisect_right(valid_timestamps, representative_timestamp)
+
+    # insertion_point 不可能為 0，因為情況 A 已經處理了
+    # 直接返回插入點前一個元素的位置即可，這就是 "最後一個已知位置"
+    return valid_positions[insertion_point - 1][1]
 
 def process_single_batch(batch_idx, image_batch_info, teacher_positions_data, sorted_classroom_photos, classroom_states, client, student_id, student_position, deployment_names, rag_objects):
     """

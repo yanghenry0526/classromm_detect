@@ -12,7 +12,12 @@ let humanAnnotationSessionData = [];
 let currentAnnotationList = [];
 let currentAnnotationIndex = 0;
 
+let filteredAnnotationList = []; // 存放篩選後的圖片列表
+let currentFilter = 'all';     // 追蹤當前的篩選狀態, 預設為 'all'
+
 let historicalAnnotationData = {};
+
+let studentProgress = {}; // 用於追蹤每個學生的標註進度 { studentName: { tagged: 0, total: 100 } }
 
 const ALL_BEHAVIOR_CATEGORIES = [
     "主動舉手",
@@ -564,12 +569,26 @@ document.addEventListener('DOMContentLoaded', function() {
     const annotationStudentList = document.getElementById('annotationStudentList');
     const annotationInterface = document.getElementById('annotationInterface');
     const annotationPlaceholder = document.getElementById('annotationPlaceholder');
-    const prevImageBtn = document.getElementById('prevImageBtn');
-    const nextImageBtn = document.getElementById('nextImageBtn');
+    
     const saveAnnotationBtn = document.getElementById('saveAnnotationBtn');
     const exportAnnotationsButton = document.getElementById('exportAnnotationsButton');
     const annoCorrectBehaviorSelect = document.getElementById('annoCorrectBehavior');
 
+
+
+    const filterButtons = document.querySelectorAll('#annotationFilter .filter-btn');
+    filterButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            filterButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+            currentFilter = button.dataset.filter;
+            applyFilter();
+        });
+    });
+
+    // 【新增上一張/下一張按鈕的事件監聽】
+    prevImageBtn.addEventListener('click', () => navigate('prev'));
+    nextImageBtn.addEventListener('click', () => navigate('next'));
 
     // --- START: 互動式評分條初始化 ---
     const confidenceSlider = document.getElementById('confidenceSlider');
@@ -642,7 +661,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // 3. 【修正】為兩個不同的下拉選單分別填充行為選項
         populateBehaviorDropdown(correctBehaviorSelect); // 填充舊的「聚焦模式」下拉選單
-        populateGroupedBehaviorDropdown(annoCorrectBehaviorSelect); // 填充新的「校準工作台」下拉選單
+        populateBehaviorSelector(); // 填充新的「校準工作台」下拉選單
 
         // 4. 開始獲取報告日期
         fetchAvailableDates();
@@ -786,17 +805,39 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     // --- 新增：聚焦與標註相關的所有函數 ---
 
+    /**
+     * @description 【全新輔助函數】根據進度數據，更新指定學生在列表中的進度條UI。
+     * @param {string} studentName - 要更新的學生姓名。
+     */
+    function updateStudentProgressUI(studentName) {
+        const progressData = studentProgress[studentName];
+        if (!progressData) return;
+
+        // 透過 data-attribute 精準找到對應學生的 li 元素
+        const studentLi = document.querySelector(`#annotationStudentList li[data-student-name="${studentName}"]`);
+        if (!studentLi) return;
+
+        const progressBar = studentLi.querySelector('.progress-bar');
+        const progressText = studentLi.querySelector('.progress-text');
+
+        if (progressBar && progressText) {
+            const percentage = progressData.total > 0 ? (progressData.tagged / progressData.total) * 100 : 0;
+            progressBar.style.width = `${percentage}%`;
+            progressText.textContent = `${progressData.tagged} / ${progressData.total}`;
+        }
+    }
+
     function populateAnnotationWorkbenchTab(data) {
         annotationStudentList.innerHTML = '';
         humanAnnotationSessionData = []; // 重置本輪會話數據
-        updateAnnotationCount(); // 更新計數器為 0
+        studentProgress = {}; // 【重要】每次載入新日期時，重置進度追蹤
+        updateAnnotationCount();
 
         if (!data || Object.keys(data).length === 0) {
             const li = document.createElement('li');
             li.textContent = '此日期無待標註影像';
             li.className = 'disabled';
             annotationStudentList.appendChild(li);
-            // 確保標註介面是隱藏的
             annotationInterface.style.display = 'none';
             annotationPlaceholder.style.display = 'block';
             return;
@@ -808,42 +849,156 @@ document.addEventListener('DOMContentLoaded', function() {
 
         for (const studentName in data) {
             const images = data[studentName];
+            
+            // 【【【 核心修改：在這裡直接、同步地計算進度 】】】
+            const total = images.length;
+            // 利用後端返回的 'is_tagged' 標記來計數
+            const tagged = images.filter(img => img.is_tagged).length;
+
+            // 將計算好的進度存入全局變量，供 saveCurrentAnnotation 更新使用
+            studentProgress[studentName] = { tagged: tagged, total: total };
+
             const li = document.createElement('li');
-            // 顯示總圖片數
-            li.textContent = `${studentName} (${images.length} 張)`;
+            // 使用 dataset 來儲存學生姓名，方便後續查找和點擊事件
             li.dataset.studentName = studentName;
             
+            // 根據計算出的進度，直接生成包含進度條的完整 HTML 結構
+            const percentage = total > 0 ? (tagged / total) * 100 : 0;
+            li.innerHTML = `
+                <span>${studentName} (${total} 張)</span>
+                <div class="progress-container">
+                    <div class="progress-bar" style="width: ${percentage}%;"></div>
+                </div>
+                <span class="progress-text">${tagged} / ${total}</span>
+            `;
+            
+            // 綁定點擊事件
             li.onclick = () => {
-                // 移除其他學生的 'active' class
                 document.querySelectorAll('#annotationStudentList li.active').forEach(el => el.classList.remove('active'));
-                // 為當前點擊的學生添加 'active' class
                 li.classList.add('active');
-                
-                // 呼叫啟動函數
+                // 呼叫（簡化後的）啟動函數
                 startAnnotationForStudent(studentName, images);
             };
             annotationStudentList.appendChild(li);
         }
-}
+    }
+
     /**
-     * @description 【重新補回的函數】當使用者點擊學生列表時，啟動該學生的標註工作流程。
+     * @description 【全新輔助函數】根據當前篩選器，更新 filteredAnnotationList
+     */
+    function applyFilter() {
+        const getTagStatus = (imageData) => {
+            // 為了在不請求 context 的情況下進行高效篩選，我們優先使用後端返回的 is_tagged
+            // 並結合本輪會話的數據進行判斷
+            if (imageData.is_tagged) return true;
+            
+            // 檢查本輪會話是否有標註
+            // 注意：這裡的路徑構建不依賴異步 context，可能不是100%準確，但作為篩選足夠了
+            const path = buildImagePath(imageData, {}); 
+            return humanAnnotationSessionData.some(item => item.image_path === path);
+        };
+
+        if (currentFilter === 'all') {
+            filteredAnnotationList = [...currentAnnotationList];
+        } else if (currentFilter === 'untagged') {
+            filteredAnnotationList = currentAnnotationList.filter(img => !getTagStatus(img));
+        } else if (currentFilter === 'tagged') {
+            filteredAnnotationList = currentAnnotationList.filter(img => getTagStatus(img));
+        }
+        updateProgressUI(); // 每次篩選後都更新進度顯示
+    }
+
+    /**
+     * @description 【全新輔助函數】更新進度條的文字和百分比
+     */
+    function updateProgressUI() {
+        const totalCount = currentAnnotationList.length;
+        const filteredCount = filteredAnnotationList.length;
+        const progressEl = document.getElementById('annotationProgress');
+
+        if (progressEl && currentAnnotationList.length > 0) {
+            const currentImage = currentAnnotationList[currentAnnotationIndex];
+            const displayIndex = filteredAnnotationList.indexOf(currentImage);
+            
+            // 根據篩選器模式顯示不同的文字
+            let modeText = "全部";
+            if (currentFilter === 'untagged') modeText = "未標註";
+            if (currentFilter === 'tagged') modeText = "已標註";
+
+            if (displayIndex !== -1) {
+                progressEl.textContent = `影像 ${displayIndex + 1} / ${filteredCount} (${modeText}模式)`;
+            } else {
+                // 如果當前圖片不在篩選列表中，給出提示
+                progressEl.textContent = `(請選擇下一張) / ${filteredCount} (${modeText}模式)`;
+            }
+        }
+    }
+
+    /**
+     * @description 【全新版本】上下張按鈕的導航邏輯
+     * @param {string} direction - 'next' 或 'prev'
+     */
+    function navigate(direction) {
+        if (filteredAnnotationList.length === 0) return;
+
+        const currentImage = currentAnnotationList[currentAnnotationIndex];
+        let currentIndexInFiltered = filteredAnnotationList.indexOf(currentImage);
+
+        // 如果當前圖片不在篩選列表中，找到一個合理的起點
+        if (currentIndexInFiltered === -1) {
+            currentIndexInFiltered = (direction === 'next') ? -1 : 0;
+        }
+
+        let nextIndexInFiltered = (direction === 'next') ? currentIndexInFiltered + 1 : currentIndexInFiltered - 1;
+
+        if (nextIndexInFiltered >= 0 && nextIndexInFiltered < filteredAnnotationList.length) {
+            const nextImage = filteredAnnotationList[nextIndexInFiltered];
+            const newMasterIndex = currentAnnotationList.indexOf(nextImage);
+            currentAnnotationIndex = newMasterIndex;
+            displayAnnotationImage(currentAnnotationIndex);
+        }
+    }
+
+    /**
+     * @description 【【【 全新強化版 】】】啟動標註流程，並異步計算和顯示初始進度。
      * @param {string} studentName - 被選中的學生姓名。
      * @param {Array} images - 該學生的待標註圖片列表。
      */
     function startAnnotationForStudent(studentName, images) {
-        // 1. 設定當前要標註的圖片列表和起始索引
         currentAnnotationList = images;
-        currentAnnotationIndex = 0;
+        
+        currentFilter = 'all';
+        document.querySelectorAll('#annotationFilter .filter-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.filter === 'all');
+        });
 
-        // 2. 切換介面顯示：隱藏提示文字，顯示標註主介面
+        applyFilter();
+        
+        // --- 自動跳轉邏輯 (強化版) ---
+        // 尋找第一張「未標註」的圖片在「完整列表」中的索引
+        const firstUnTaggedIndex = currentAnnotationList.findIndex(imageData => {
+            // 為了準確判斷，我們需要檢查三個地方：
+            // 1. 後端返回的 is_tagged 狀態
+            // 2. 本輪會話 humanAnnotationSessionData 中是否有記錄
+            // 3. 歷史記錄 historicalAnnotationData 中是否有記錄 (作為備用檢查)
+            const path = buildImagePath(imageData, {}); // 使用簡化 context 進行路徑構建
+            const inSession = humanAnnotationSessionData.some(item => item.image_path === path);
+            const inHistory = historicalAnnotationData[path];
+            
+            return !imageData.is_tagged && !inSession && !inHistory;
+        });
+        
+        currentAnnotationIndex = (firstUnTaggedIndex !== -1) ? firstUnTaggedIndex : 0;
+
         annotationPlaceholder.style.display = 'none';
         annotationInterface.style.display = 'block';
-
-        // 3. 更新介面上的學生姓名
         document.getElementById('annotationStudentName').textContent = `正在標註: ${studentName}`;
         
-        // 4. 呼叫 displayAnnotationImage 來顯示第一張圖片
         displayAnnotationImage(currentAnnotationIndex);
+        
+        if (currentAnnotationIndex > 0) {
+            console.log(`已為您自動跳轉到第一張未完成的圖片 (第 ${currentAnnotationIndex + 1} 張)。`);
+        }
     }
     
     // --- 【全新函數】開始為特定學生標註 ---
@@ -945,29 +1100,42 @@ document.addEventListener('DOMContentLoaded', function() {
         const historicalAnnotation = historicalAnnotationData[imageFullPath];
         const finalAnnotation = sessionAnnotation || historicalAnnotation;
 
-        if (finalAnnotation) {
-            // 如果找到了標註，載入其內容
-            annoCorrectBehaviorSelect.value = finalAnnotation.corrected_behavior;
-            setSliderValue(finalAnnotation.calibration_confidence);
+        const behaviorSelector = document.getElementById('behaviorSelector');
+        // 先移除所有按鈕的 active 狀態，為設定新狀態做準備
+        behaviorSelector.querySelectorAll('.behavior-btn').forEach(btn => btn.classList.remove('active'));
 
-            // 【核心修改：顯示「已校準」覆蓋層】
+        if (finalAnnotation) {
+            // --- 如果找到了標註紀錄 ---
+            // 1. 找到對應的按鈕並將其設為 'active'
+            const selectedBtn = behaviorSelector.querySelector(`.behavior-btn[data-value="${finalAnnotation.corrected_behavior}"]`);
+            if (selectedBtn) {
+                selectedBtn.classList.add('active');
+            }
+            // 2. 設定信度評分條
+            setSliderValue(finalAnnotation.calibration_confidence);
+            
+            // ... (顯示 "已校準" 覆蓋層的程式碼維持不變) ...
             if (statusOverlay) {
-                statusOverlay.style.display = 'flex'; // 先讓它在 DOM 中可見
-                // 使用一個微小的延遲來確保瀏覽器渲染了 display 屬性的變化，從而觸發 opacity 的過渡動畫
-                setTimeout(() => {
-                    statusOverlay.style.opacity = '1';
-                }, 10);
+                statusOverlay.style.display = 'flex';
+                setTimeout(() => { statusOverlay.style.opacity = '1'; }, 10);
             }
 
         } else {
-            // 如果沒有任何標註，重置表單
-            annoCorrectBehaviorSelect.value = imageData.original_behavior;
+            // --- 如果沒有任何標註紀錄 ---
+            // 1. 找到 AI 原始判斷的行為按鈕並設為 'active'
+            const originalBtn = behaviorSelector.querySelector(`.behavior-btn[data-value="${imageData.original_behavior}"]`);
+            if (originalBtn) {
+                originalBtn.classList.add('active');
+            }
+            // 2. 重置信度評分條
             setSliderValue(null);
         }
 
         // 7. 更新導航按鈕的狀態
         prevImageBtn.disabled = index === 0;
         nextImageBtn.disabled = index === currentAnnotationList.length - 1;
+
+        updateProgressUI(); 
     }
     
     /**
@@ -975,16 +1143,24 @@ document.addEventListener('DOMContentLoaded', function() {
      * @returns {Promise<boolean>} - 成功儲存則返回 true，失敗則返回 false。
      */
     async function saveCurrentAnnotation() {
-        const selectedBehavior = annoCorrectBehaviorSelect.value;
-        // 【【【 核心修正點 】】】
-        // 從評分條的 dataset 中獲取選中的值
+        // 1. 從 UI 獲取標註員的輸入
+        const activeBtn = document.querySelector('#behaviorSelector .behavior-btn.active');
+        const selectedBehavior = activeBtn ? activeBtn.dataset.value : null;
         const confidenceRating = document.getElementById('confidenceSlider')?.dataset.selectedValue;
 
-        if (!confidenceRating || confidenceRating === "0") { // 增加一個檢查，確保使用者有點擊
-            alert('請評估您此次標註的信度！');
-            return false;
+        // 【新增驗證】確保使用者有點選一個行為
+        if (!selectedBehavior) {
+            alert('請選擇一個行為！');
+            return false; // 返回 false 來中斷儲存流程
         }
 
+        // 2. 驗證輸入
+        if (!confidenceRating || confidenceRating === "0") {
+            alert('請評估您此次標註的信度！');
+            return false; // 如果沒有評分，則直接返回，不執行後續操作
+        }
+
+        // 3. 獲取當前圖片的相關數據
         const imageData = currentAnnotationList[currentAnnotationIndex];
         let fullContextData = {};
         try {
@@ -996,19 +1172,23 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error("獲取上下文時出錯:", e);
         }
         
+        // 4. 構建唯一的圖片路徑標識符
         const imageFullPath = buildImagePath(imageData, fullContextData);
         if (!imageFullPath) {
             alert("錯誤：無法建構有效的圖片路徑，標註無法儲存。");
             return false;
         }
 
-        const existingIndex = humanAnnotationSessionData.findIndex(item => item.image_path === imageFullPath);
+        // 5. 【【【 核心修改：在儲存前檢查狀態 】】】
+        // 檢查這張圖片在「本輪會話」和「歷史記錄」中是否都【未】被標註過。
+        // `isNewTag` 為 true，代表這是一次全新的完成，進度條需要 +1。
+        const isNewTag = !humanAnnotationSessionData.some(item => item.image_path === imageFullPath) && !historicalAnnotationData[imageFullPath];
 
+        // 6. 構建要儲存的標註物件
         const annotationObject = {
             image_path: imageFullPath,
             original_behavior: imageData.original_behavior,
             corrected_behavior: selectedBehavior,
-            // error_rating: 0, // 這個欄位在校準工作台中似乎不再需要，可以考慮移除
             calibration_confidence: parseInt(confidenceRating),
             student_name: imageData.student_name,
             source_report: imageData.report_filename,
@@ -1024,13 +1204,45 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         };
 
+        // 7. 將標註物件存入「本輪會話」的數據中 (更新或新增)
+        const existingIndex = humanAnnotationSessionData.findIndex(item => item.image_path === imageFullPath);
         if (existingIndex > -1) {
             humanAnnotationSessionData[existingIndex] = annotationObject;
         } else {
             humanAnnotationSessionData.push(annotationObject);
         }
         
+        // 8. 更新總的匯出計數器
         updateAnnotationCount();
+
+        // 9. 【【【 核心修改：如果是新標註，則更新進度 】】】
+        if (isNewTag) {
+            const studentName = imageData.student_name;
+            if (studentProgress[studentName]) {
+                studentProgress[studentName].tagged += 1;
+                // 呼叫我們的輔助函數來更新畫面上的進度條
+                updateStudentProgressUI(studentName);
+            }
+        }
+
+        // 10. 【重要補充】同步更新前端狀態
+        if (isNewTag) {
+            currentAnnotationList[currentAnnotationIndex].is_tagged = true;
+        }
+
+        // 11. 儲存成功後，重新應用當前的篩選器
+        applyFilter();
+        
+        // 12. 如果當前在 '僅未標註' 模式，自動跳到篩選後列表的第一張
+        if (currentFilter === 'untagged' && filteredAnnotationList.length > 0) {
+            setTimeout(() => {
+                const nextImage = filteredAnnotationList[0];
+                currentAnnotationIndex = currentAnnotationList.indexOf(nextImage);
+                displayAnnotationImage(currentAnnotationIndex);
+            }, 300); // 延遲一點跳轉，體驗更好
+        }
+        
+        // 10. 異步操作成功，返回 true
         return true;
     }
 
@@ -1119,28 +1331,6 @@ document.addEventListener('DOMContentLoaded', function() {
             exportAnnotationsButton.disabled = humanAnnotationSessionData.length === 0;
         });
     }
-
-    prevImageBtn.addEventListener('click', async () => { // 1. 加上 async
-        if (currentAnnotationIndex > 0) {
-            // 在切換前，如果用戶已經評分，則嘗試自動儲存
-            if (document.querySelector('#annoConfidenceRating input:checked')) {
-                await saveCurrentAnnotation(); // 2. 使用 await 等待儲存完成
-            }
-            currentAnnotationIndex--;
-            displayAnnotationImage(currentAnnotationIndex);
-        }
-    });
-
-    nextImageBtn.addEventListener('click', async () => { // 1. 加上 async
-        if (currentAnnotationIndex < currentAnnotationList.length - 1) {
-            // 在切換前，如果用戶已經評分，則嘗試自動儲存
-            if (document.querySelector('#annoConfidenceRating input:checked')) {
-                await saveCurrentAnnotation(); // 2. 使用 await 等待儲存完成
-            }
-            currentAnnotationIndex++;
-            displayAnnotationImage(currentAnnotationIndex);
-        }
-    });
 
     saveAnnotationBtn.addEventListener('click', async () => { // 1. 加上 async
         // 2. 使用 await 等待儲存完成，並根據返回的 true/false 決定是否提示
@@ -1506,4 +1696,38 @@ function renderBehaviorTrendChart(canvas, labels, datasets) {
             }
         }
     });
+}
+
+// teacher_dashboard.js 中新增此函數
+function populateBehaviorSelector() {
+    const container = document.getElementById('behaviorSelector');
+    if (!container) return;
+
+    // 遍歷我們定義好的分類物件
+    for (const categoryName in BEHAVIOR_CATEGORIES_GROUPED) {
+        // 透過 data-category 屬性找到對應的容器
+        const wrapper = container.querySelector(`.behavior-buttons-wrapper[data-category="${categoryName}"]`);
+        if (!wrapper) continue;
+
+        wrapper.innerHTML = ''; // 清空舊按鈕
+
+        const behaviors = BEHAVIOR_CATEGORIES_GROUPED[categoryName];
+        behaviors.forEach(behaviorLabel => {
+            const button = document.createElement('button');
+            button.type = 'button'; // 避免觸發表單提交
+            button.className = 'behavior-btn';
+            button.textContent = behaviorLabel;
+            button.dataset.value = behaviorLabel; // 將行為名稱存儲在 data-* 屬性中
+
+            // 為每個按鈕綁定點擊事件
+            button.onclick = function() {
+                // 1. 移除所有按鈕的 'active' class
+                container.querySelectorAll('.behavior-btn').forEach(btn => btn.classList.remove('active'));
+                // 2. 為當前點擊的按鈕添加 'active' class
+                this.classList.add('active');
+            };
+
+            wrapper.appendChild(button);
+        });
+    }
 }

@@ -136,6 +136,77 @@ def index():
             return redirect(url_for('teacher_dashboard_page'))
     return redirect(url_for('login_page'))
 
+def enhance_teacher_positions_in_report(report_data):
+    """
+    【核心輔助函數 v3.0 - 雙向填充最終版】
+    對單份學生報告的 detailed_sequence_analysis 進行即時修復，
+    實現老師位置的「雙向填充」，確保最大程度的數據覆蓋。
+    """
+    if not isinstance(report_data, dict):
+        return report_data
+
+    detailed_sequence_analysis = report_data.get("detailed_sequence_analysis", [])
+    if not detailed_sequence_analysis:
+        return report_data
+
+    # 步驟 1: 提取所有批次的原始位置資訊
+    positions = []
+    for batch in detailed_sequence_analysis:
+        if isinstance(batch, dict):
+            pos = batch.get("matched_teacher_position_text")
+            # 將所有無效值 (包括 "未偵測到", "", None) 都統一處理為 None
+            if pos and pos not in ["未偵測到", "未知"]:
+                positions.append(pos)
+            else:
+                positions.append(None)
+        else:
+            positions.append(None) # 處理 batch 結構不正確的情況
+
+    # 步驟 2: 向前填充 (Forward Fill)
+    # 這個迴圈會將所有 None 值替換為其前面最近的一個有效值
+    last_valid_position = None
+    for i in range(len(positions)):
+        if positions[i] is not None:
+            last_valid_position = positions[i]
+        elif last_valid_position is not None:
+            positions[i] = last_valid_position
+
+    # 步驟 3: 向後填充 (Backward Fill)
+    # 這個迴圈專門處理開頭連續為 None 的情況
+    first_valid_position = None
+    for pos in positions:
+        if pos is not None:
+            first_valid_position = pos
+            break
+    
+    if first_valid_position is not None:
+        for i in range(len(positions)):
+            if positions[i] is None:
+                positions[i] = first_valid_position
+            else:
+                # 一旦遇到第一個非 None 值，就停止向後填充
+                break
+
+    # 步驟 4: 最終備用值處理
+    # 如果整份報告都沒有任何有效位置，則使用備用值
+    initial_fallback_position = "未知"
+    metadata = report_data.get("report_metadata", {})
+    if metadata:
+        student_seat_desc = metadata.get("classroom_context", {}).get("student_position", "")
+        if any(keyword in student_seat_desc for keyword in ["左邊", "右邊", "中間"]):
+            initial_fallback_position = "教室前方"
+            
+    for i in range(len(positions)):
+        if positions[i] is None:
+            positions[i] = initial_fallback_position
+
+    # 步驟 5: 將修復好的位置資訊寫回到 report_data 物件中
+    for i, batch in enumerate(detailed_sequence_analysis):
+        if isinstance(batch, dict) and i < len(positions):
+            batch["matched_teacher_position_text"] = positions[i]
+            
+    return report_data
+
 @app.route('/login', methods=['GET', 'POST'])
 def login_page():
     if current_user.is_authenticated:
@@ -706,28 +777,27 @@ def api_log_page_event_beacon():
 @login_required
 def get_all_students_activity_summary():
     """
-    獲取指定日期的所有學生網站活動摘要和課堂行為報告摘要。
-    此版本嚴格使用報告JSON內部的 'report_generation_time' 作為日期篩選依據。
+    【v2.0 - 修正版】
+    獲取指定日期的所有學生網站活動摘要和【經過即時修復】的課堂行為報告。
+    此版本確保了回傳給前端的報告數據中，老師位置是經過向前填充處理的。
     """
-    # --- 步驟 1: 權限檢查與參數獲取 ---
+    # --- 步驟 1: 權限檢查與參數獲取 (不變) ---
     if current_user.role != 'teacher':
         return jsonify({"error": "權限不足"}), 403
 
-    selected_date_str = request.args.get('date') # e.g., "2025-08-24"
+    selected_date_str = request.args.get('date')
     if not selected_date_str:
         return jsonify({"error": "必須提供日期參數"}), 400
     
     try:
-        # --- 步驟 2: 數據初始化 ---
+        # --- 步驟 2: 數據初始化 (不變) ---
         students = User.query.filter_by(role='student').all()
         summary_data = []
         print(f"\n--- [API /api/teacher/all_students_activity_summary] ---")
         print(f"教師 {current_user.username} 請求摘要。學生總數: {len(students)}。篩選日期: {selected_date_str}")
 
-        # --- 步驟 3: (性能優化) 一次性查詢所有學生的網站活動數據 ---
+        # --- 步驟 3: (性能優化) 查詢網站活動數據 (不變) ---
         all_student_ids = [s.id for s in students]
-        
-        # 查詢點擊日誌 (這部分邏輯與之前相同，保持不變)
         general_clicks_query = db.session.query(
             ClickLog.user_id,
             db.func.count(ClickLog.id)
@@ -736,7 +806,6 @@ def get_all_students_activity_summary():
             ClickLog.event_type == 'click'
         ).group_by(ClickLog.user_id).all()
         
-        # 查詢頁籤停留時間 (這部分邏輯與之前相同，保持不變)
         tab_durations_query = db.session.query(
             ClickLog.user_id,
             ClickLog.element_or_page_id,
@@ -746,7 +815,6 @@ def get_all_students_activity_summary():
             ClickLog.event_type.like('tab_view_end%')
         ).group_by(ClickLog.user_id, ClickLog.element_or_page_id).all()
 
-        # 將查詢結果轉換為字典以便快速查找 (這部分邏輯與之前相同，保持不變)
         clicks_by_student = {user_id: count for user_id, count in general_clicks_query}
         time_by_student = {}
         for user_id, page_id, total_seconds in tab_durations_query:
@@ -761,93 +829,86 @@ def get_all_students_activity_summary():
                 }.get(page_id, page_id)
                 time_by_student[user_id][tab_display_name] = format_seconds_to_readable(total_seconds)
 
-        # --- 步驟 4: 遍歷每一位學生，查找並處理其符合日期的報告 ---
+        # --- 步驟 4: 遍歷學生，查找、修復並匯總其報告 ---
         for student in students:
             print(f"  正在處理學生: {student.username} (ID: {student.id})")
             
-            # 從預先查好的字典中獲取網站互動數據
             total_general_clicks = clicks_by_student.get(student.id, 0)
             time_spent_on_tabs_formatted = time_by_student.get(student.id, {})
-
-            # 初始化報告摘要的預設結構
-            student_report_summary = {
-                "latest_report_filename": None,
-                "report_date": "無符合日期的報告",
-                "behavior_statistics": [],
-                "behavior_to_images_index": {},
+            
+            # 初始化一個空的報告結構作為預設值
+            student_report_data = {
+                "report_metadata": {"student_id": student.username},
+                "overall_summary": {
+                    "behavior_statistics": [],
+                    "behavior_to_images_index": {}
+                },
+                "detailed_sequence_analysis": [],
+                "error": f"在日期 {selected_date_str} 未找到報告"
             }
 
             student_report_folder = os.path.join(app.config['BEHAVIOR_REPORT_FOLDER'], student.username)
             
             if os.path.isdir(student_report_folder):
-                # 獲取該學生的所有報告檔案，進行內部日期檢查
                 all_files = sorted(glob.glob(os.path.join(student_report_folder, f"student_{student.username}_behavior_report_*.json")), reverse=True)
                 
                 found_report_path = None
-                # 【【【 核心修正邏輯開始 】】】
                 for report_path in all_files:
                     try:
                         with open(report_path, 'r', encoding='utf-8') as f:
                             data = json.load(f)
                         
-                        # 1. 從 JSON 內部讀取 "MM/DD" 格式的日期
-                        internal_time_str = data.get('report_metadata', {}).get('report_generation_time') # e.g., "08/24"
-                        
-                        if not internal_time_str or not isinstance(internal_time_str, str):
-                            continue
+                        internal_time_str = data.get('report_metadata', {}).get('report_generation_time')
+                        if not internal_time_str or not isinstance(internal_time_str, str): continue
 
-                        # 2. 從檔名安全地獲取年份 (因為內部沒有年份)
                         report_filename = os.path.basename(report_path)
                         year_match = re.search(r'_(\d{4})\d{4}_', report_filename)
-                        if not year_match:
-                            continue
-                        report_year = year_match.group(1) # e.g., "2025"
+                        if not year_match: continue
+                        report_year = year_match.group(1)
 
-                        # 3. 組合出完整的內部日期 "YYYY-MM-DD"
                         parts = re.split(r'[/]', internal_time_str)
                         if len(parts) == 2:
                             month, day = parts[0].zfill(2), parts[1].zfill(2)
-                            internal_full_date = f"{report_year}-{month}-{day}" # e.g., "2025-08-24"
-                            
-                            # 4. 與前端選擇的日期進行比對
+                            internal_full_date = f"{report_year}-{month}-{day}"
                             if internal_full_date == selected_date_str:
                                 found_report_path = report_path
-                                break # 找到第一個匹配的就跳出迴圈 (因為檔案已按日期排序)
-                    except (json.JSONDecodeError, KeyError, IndexError) as e:
+                                break
+                    except Exception as e:
                         print(f"    警告: 處理學生 {student.username} 的報告 {os.path.basename(report_path)} 時出錯: {e}")
                         continue
-                # 【【【 核心修正邏輯結束 】】】
-
-                # 如果找到了符合日期的報告，則解析其內容
+                
+                # --- 【【【核心修改邏輯：讀取並即時修復報告】】】 ---
                 if found_report_path:
                     print(f"    找到匹配日期的報告: {os.path.basename(found_report_path)}")
-                    
                     try:
                         with open(found_report_path, 'r', encoding='utf-8') as f:
-                            report_data = json.load(f)
+                            raw_report_data = json.load(f)
                         
-                        overall_summary = report_data.get("overall_summary", {})
+                        # 在這裡呼叫我們的輔助函數來進行即時修復
+                        student_report_data = enhance_teacher_positions_in_report(raw_report_data)
                         
-                        # 使用報告數據填充摘要資訊
-                        student_report_summary["latest_report_filename"] = os.path.basename(found_report_path)
-                        student_report_summary["report_date"] = selected_date_str # 使用前端傳來的日期作為報告日期
-                        student_report_summary["behavior_statistics"] = overall_summary.get("behavior_statistics", [])
-                        student_report_summary["behavior_to_images_index"] = overall_summary.get("behavior_to_images_index", {})
+                        # 為了前端方便，手動添加一些元數據
+                        if "overall_summary" not in student_report_data:
+                            student_report_data["overall_summary"] = {}
+                        student_report_data["overall_summary"]["latest_report_filename"] = os.path.basename(found_report_path)
+                        student_report_data["overall_summary"]["report_date"] = selected_date_str
 
                     except Exception as e:
                         print(f"    錯誤: 讀取或解析報告 {os.path.basename(found_report_path)} 時出錯: {e}")
+                        student_report_data["error"] = "報告檔案解析失敗"
                 else:
                     print(f"    警告: 學生 {student.username} 在日期 '{selected_date_str}' 沒有找到報告檔案。")
             else:
                 print(f"    警告: 未找到學生 {student.username} 的報告資料夾: {student_report_folder}")
 
             # --- 步驟 5: 組合該學生的最終數據 ---
+            # 這裡的 "report_summary" 現在包含了完整的、經過修復的報告內容
             summary_data.append({
                 "student_id": student.id,
                 "student_name": student.username,
                 "total_general_clicks": total_general_clicks,
                 "time_spent_on_tabs_details": time_spent_on_tabs_formatted,
-                "report_summary": student_report_summary
+                "report_summary": student_report_data
             })
         
         print("--- [API /teacher/all_students_activity_summary] 處理完成 ---")
@@ -1187,71 +1248,69 @@ def api_get_image_context():
         return jsonify({"error": "缺少參數"}), 400
         
     try:
+        if ".." in report_filename or "/" in report_filename or "\\" in report_filename:
+            return jsonify({'error': '無效的報告檔名'}), 400
+
         student_name_match = re.search(r'student_([^_]+)_behavior_report', report_filename)
         if not student_name_match:
-            return jsonify({"error": "無法解析學生姓名"}), 400
+            return jsonify({"error": "無法從報告檔名中解析學生姓名"}), 400
         student_name = student_name_match.group(1)
         
         report_path = os.path.join(app.config['BEHAVIOR_REPORT_FOLDER'], student_name, report_filename)
         if not os.path.isfile(report_path):
-            return jsonify({"error": "報告檔案未找到"}), 404
+            return jsonify({'error': f'報告檔案 "{report_filename}" 未找到'}), 404
 
         with open(report_path, 'r', encoding='utf-8') as f:
             report_data = json.load(f)
+        
+        # --- 【【【核心修改點：在這裡呼叫我們的輔助函數】】】 ---
+        report_data = enhance_teacher_positions_in_report(report_data)
+        # --- 【【【修改結束】】】 ---
 
-        # 預設值
+        # 預設上下文結構 (不變)
         context = {
-            "teacher_position": "未知",
-            "classroom_subject": "未知",
-            "seating_position": "未知",
-            "original_ai_reasoning": "未找到",
-            "original_ai_confidence": 0.0,
-            "batch_context": None,
-            "ai_model_version": None,
-            "student_number": "unknown", # 【新增】預設值
-            "report_date_internal": "unknown" # 【新增】預設值
+            "teacher_position": "未知", "classroom_subject": "未知", "seating_position": "未知",
+            "original_ai_reasoning": "未找到", "original_ai_confidence": 0.0, "batch_context": None,
+            "ai_model_version": None, "student_number": "unknown", "report_date_internal": "unknown"
         }
 
-        # 1. 從 metadata 提取
+        # 從 metadata 提取基本資訊 (不變)
         metadata = report_data.get("report_metadata", {})
         context["classroom_subject"] = metadata.get("student_image_source_folder", "未知")
         context["seating_position"] = metadata.get("classroom_context", {}).get("student_position", "未知")
-        
-        # 【【【 關鍵修改開始 】】】
-        # 新增這兩行，從 JSON 的 metadata 中讀取學生座號和內部報告時間
         context["student_number"] = metadata.get("student_number", "unknown")
-        context["report_date_internal"] = metadata.get("report_generation_time", "unknown") # 例如 "08/24"
-        # 【【【 關鍵修改結束 】】】
-        
+        context["report_date_internal"] = metadata.get("report_generation_time", "unknown")
         context["ai_model_version"] = {
             "vision": metadata.get("analysis_settings", {}).get("vision_model", "未知"),
             "text": metadata.get("analysis_settings", {}).get("text_model", "未知")
         }
 
-        # 2. 從 detailed_sequence_analysis 遍歷查找 (這部分不變)
+        # 從（已經被處理過的）detailed_sequence_analysis 中查找資訊
         for batch in report_data.get("detailed_sequence_analysis", []):
             if image_filename in batch.get("image_filenames_in_batch", []):
+                # 現在這裡的 matched_teacher_position_text 已經是填充過的了
                 context["teacher_position"] = batch.get("matched_teacher_position_text", "未知")
                 
+                # 後續的邏輯不變...
                 for highlight in batch.get("analysis", {}).get("per_image_highlights", []):
                     try:
                         img_index = highlight.get("image_index_in_sequence")
-                        if img_index is not None and len(batch["image_filenames_in_batch"]) > img_index and batch["image_filenames_in_batch"][img_index] == image_filename:
+                        if img_index is not None and 0 <= img_index < len(batch["image_filenames_in_batch"]) and batch["image_filenames_in_batch"][img_index] == image_filename:
                             context["original_ai_reasoning"] = highlight.get("context_description", "未找到")
                             context["original_ai_confidence"] = highlight.get("confidence", 0.0)
-                            context["batch_context"] = {
-                                "batch_index": batch.get("batch_index", -1),
-                                "image_index_in_batch": img_index
-                            }
+                            context["batch_context"] = {"batch_index": batch.get("batch_index", -1), "image_index_in_batch": img_index}
                             return jsonify(context)
-                    except IndexError:
-                        continue
-        
-        return jsonify(context)
+                    except (IndexError, TypeError): continue
+                
+                return jsonify(context)
+
+        return jsonify({'error': f'請求的圖片 "{image_filename}" 未在報告中找到'}), 404
 
     except Exception as e:
-        print(f"獲取圖片上下文時出錯: {e}")
-        return jsonify({"error": "伺服器內部錯誤"}), 500
+        import traceback
+        print(f"伺服器在獲取圖片上下文時發生內部錯誤: {e}")
+        traceback.print_exc()
+        return jsonify({"error": f"伺服器內部錯誤: {str(e)}"}), 500
 
 @app.route('/api/teacher/get_comprehensive_report_by_date')
 @login_required
@@ -1295,28 +1354,161 @@ def api_get_comprehensive_report_by_date():
         print(f"獲取課堂綜合報告時發生錯誤: {e}")
         return jsonify({"error": "伺服器在獲取綜合報告時發生錯誤"}), 500
 
+# @app.route('/api/teacher/get_sampled_images_for_annotation')
+# @login_required
+# def api_get_sampled_images_for_annotation():
+#     """
+#     為校準工作台獲取智慧抽樣的圖片列表。
+#     1. 抽樣結果根據日期和學生姓名固定，可重複獲取。
+#     2. 根據當前登入的使用者，讀取其個人的歷史標註記錄。
+#     3. 將抽樣列表和歷史標註整合後一次性返回給前端。
+#     """
+#     # --- 步驟 0: 權限與參數檢查 ---
+#     if current_user.role != 'teacher':
+#         return jsonify({"error": "權限不足"}), 403
+
+#     selected_date_str = request.args.get('date')
+#     if not selected_date_str:
+#         return jsonify({"error": "必須提供日期參數"}), 400
+
+#     # --- 步驟 1: 根據當前登入者，讀取其個人歷史標註 ---
+#     historical_annotations = {}
+#     try:
+#         annotator_username = current_user.username
+#         # 動態生成個人化的檔名，例如: human_annotation_c123.json
+#         filename = f"human_annotation_{annotator_username}.json"
+#         annotation_file_path = os.path.join(app.config['TRAINING_JSON_FOLDER'], filename)
+        
+#         if os.path.isfile(annotation_file_path):
+#             with open(annotation_file_path, 'r', encoding='utf-8') as f:
+#                 content = f.read()
+#                 if content:
+#                     all_annotations = json.loads(content)
+#                     # 將列表轉換為以 'image_path' 為鍵的字典，以便前端快速查找
+#                     historical_annotations = {item['image_path']: item for item in all_annotations}
+#         print(f"使用者 {annotator_username} 成功讀取 {len(historical_annotations)} 筆歷史標註。")
+#     except Exception as e:
+#         print(f"警告：為使用者 {annotator_username} 讀取歷史標註檔案時出錯: {e}")
+    
+#     # --- 步驟 2: 遍歷學生，進行固定的隨機抽樣 ---
+#     report_root_folder = app.config['BEHAVIOR_REPORT_FOLDER']
+#     all_students_sampled_images = {}
+#     try:
+#         student_folders = [d for d in os.listdir(report_root_folder) if os.path.isdir(os.path.join(report_root_folder, d))]
+        
+#         for student_name in student_folders:
+#             # 2a. 尋找符合日期的報告檔案 (此邏輯與其他API一致)
+#             student_report_folder = os.path.join(report_root_folder, student_name)
+#             found_report_path = None
+#             all_files = sorted(glob.glob(os.path.join(student_report_folder, f"student_{student_name}_behavior_report_*.json")), reverse=True)
+#             for report_path in all_files:
+#                 try:
+#                     report_filename = os.path.basename(report_path)
+#                     year_match = re.search(r'_(\d{4})\d{4}_', report_filename)
+#                     if not year_match: continue
+#                     report_year = year_match.group(1)
+
+#                     with open(report_path, 'r', encoding='utf-8') as f:
+#                         data = json.load(f)
+#                     internal_time_str = data.get('report_metadata', {}).get('report_generation_time')
+                    
+#                     if internal_time_str and isinstance(internal_time_str, str):
+#                         parts = re.split(r'[/]', internal_time_str)
+#                         if len(parts) == 2:
+#                             month, day = parts[0].zfill(2), parts[1].zfill(2)
+#                             internal_full_date = f"{report_year}-{month}-{day}"
+#                             if internal_full_date == selected_date_str:
+#                                 found_report_path = report_path
+#                                 break
+#                 except Exception as e:
+#                     print(f"警告: 處理報告 {os.path.basename(report_path)} 時發生錯誤: {e}")
+#                     continue
+            
+#             if not found_report_path:
+#                 continue
+
+#             # 2b. 設定固定的隨機種子，確保每次抽樣結果都一樣
+#             session_seed = f"{selected_date_str}-{student_name}"
+#             random.seed(session_seed)
+
+#             # 2c. 執行智慧抽樣
+#             with open(found_report_path, 'r', encoding='utf-8') as f:
+#                 report_data = json.load(f)
+
+#             high_confidence_images = []
+#             low_confidence_images = []
+#             for batch in report_data.get("detailed_sequence_analysis", []):
+#                 for i, image_filename in enumerate(batch.get("image_filenames_in_batch", [])):
+#                     try:
+#                         highlight = batch["analysis"]["per_image_highlights"][i]
+#                         confidence = highlight.get("confidence", 0.0)
+#                         original_behavior_raw = highlight.get("behavior_category", "未知")
+#                         original_behavior = original_behavior_raw[0] if isinstance(original_behavior_raw, list) else original_behavior_raw
+                        
+#                         image_info = {
+#                             "report_filename": os.path.basename(found_report_path),
+#                             "image_filename": image_filename,
+#                             "original_behavior": original_behavior,
+#                             "student_name": student_name
+#                         }
+
+#                         if confidence >= 0.95:
+#                             high_confidence_images.append(image_info)
+#                         else:
+#                             low_confidence_images.append(image_info)
+#                     except (IndexError, KeyError) as e:
+#                         print(f"警告: 處理報告 {os.path.basename(found_report_path)} 中的批次資料時出錯: {e}")
+#                         continue
+            
+#             high_sample_size = min(int(len(high_confidence_images) * 0.1), len(high_confidence_images))
+#             low_sample_size = min(int(len(low_confidence_images) * 0.9), len(low_confidence_images))
+#             sampled_high = random.sample(high_confidence_images, k=high_sample_size)
+#             sampled_low = random.sample(low_confidence_images, k=low_sample_size)
+            
+#             final_sample_list = sampled_high + sampled_low
+#             random.shuffle(final_sample_list)
+
+#             if final_sample_list:
+#                 all_students_sampled_images[student_name] = final_sample_list
+
+#     except Exception as e:
+#         import traceback
+#         print(f"!!!!!!!!!!!! API ERROR in /api/teacher/get_sampled_images_for_annotation !!!!!!!!!!!!")
+#         print(traceback.format_exc())
+#         return jsonify({"error": "伺服器在抽樣圖片時發生內部錯誤。"}), 500
+
+#     # --- 步驟 3: 將抽樣列表和個人歷史標註整合後，一次性返回 ---
+#     return jsonify({
+#         "sampled_images": all_students_sampled_images,
+#         "historical_annotations": historical_annotations
+#     })
+
 @app.route('/api/teacher/get_sampled_images_for_annotation')
 @login_required
 def api_get_sampled_images_for_annotation():
     """
+    【v2.0 - 序列上下文抽樣版】
     為校準工作台獲取智慧抽樣的圖片列表。
-    1. 抽樣結果根據日期和學生姓名固定，可重複獲取。
-    2. 根據當前登入的使用者，讀取其個人的歷史標註記錄。
-    3. 將抽樣列表和歷史標註整合後一次性返回給前端。
+    1. 採用分層置信度抽樣找到關鍵幀。
+    2. 對於每個被選中的關鍵幀，自動包含其前後 N 張圖片作為上下文。
+    3. 嘗試將總樣本數控制在一個目標範圍內。
     """
-    # --- 步驟 0: 權限與參數檢查 ---
+    # --- 步驟 0: 權限與參數檢查 (不變) ---
     if current_user.role != 'teacher':
         return jsonify({"error": "權限不足"}), 403
 
     selected_date_str = request.args.get('date')
     if not selected_date_str:
         return jsonify({"error": "必須提供日期參數"}), 400
+        
+    # --- 【新增】可配置的抽樣參數 ---
+    TARGET_TOTAL_SAMPLES = 150  # 每個學生的目標總樣本數
+    CONTEXT_WINDOW = 2          # 關鍵幀前後各包含幾張圖片 (2代表前後各2張，總共5張)
 
-    # --- 步驟 1: 根據當前登入者，讀取其個人歷史標註 ---
+    # --- 步驟 1: 讀取個人歷史標註 (不變) ---
     historical_annotations = {}
     try:
         annotator_username = current_user.username
-        # 動態生成個人化的檔名，例如: human_annotation_c123.json
         filename = f"human_annotation_{annotator_username}.json"
         annotation_file_path = os.path.join(app.config['TRAINING_JSON_FOLDER'], filename)
         
@@ -1324,35 +1516,30 @@ def api_get_sampled_images_for_annotation():
             with open(annotation_file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
                 if content:
-                    all_annotations = json.loads(content)
-                    # 將列表轉換為以 'image_path' 為鍵的字典，以便前端快速查找
-                    historical_annotations = {item['image_path']: item for item in all_annotations}
-        print(f"使用者 {annotator_username} 成功讀取 {len(historical_annotations)} 筆歷史標註。")
+                    historical_annotations = {item['image_path']: item for item in json.loads(content)}
     except Exception as e:
         print(f"警告：為使用者 {annotator_username} 讀取歷史標註檔案時出錯: {e}")
     
-    # --- 步驟 2: 遍歷學生，進行固定的隨機抽樣 ---
+    # --- 步驟 2: 遍歷學生，進行新的抽樣 ---
     report_root_folder = app.config['BEHAVIOR_REPORT_FOLDER']
     all_students_sampled_images = {}
     try:
         student_folders = [d for d in os.listdir(report_root_folder) if os.path.isdir(os.path.join(report_root_folder, d))]
         
         for student_name in student_folders:
-            # 2a. 尋找符合日期的報告檔案 (此邏輯與其他API一致)
+            # 2a. 尋找符合日期的報告檔案 (不變)
             student_report_folder = os.path.join(report_root_folder, student_name)
             found_report_path = None
+            # ... (這一段尋找報告路徑的 for 迴圈邏輯和您現有版本完全相同，此處省略以保持簡潔)
             all_files = sorted(glob.glob(os.path.join(student_report_folder, f"student_{student_name}_behavior_report_*.json")), reverse=True)
             for report_path in all_files:
                 try:
-                    report_filename = os.path.basename(report_path)
-                    year_match = re.search(r'_(\d{4})\d{4}_', report_filename)
+                    report_filename_base = os.path.basename(report_path)
+                    year_match = re.search(r'_(\d{4})\d{4}_', report_filename_base)
                     if not year_match: continue
                     report_year = year_match.group(1)
-
-                    with open(report_path, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
+                    with open(report_path, 'r', encoding='utf-8') as f: data = json.load(f)
                     internal_time_str = data.get('report_metadata', {}).get('report_generation_time')
-                    
                     if internal_time_str and isinstance(internal_time_str, str):
                         parts = re.split(r'[/]', internal_time_str)
                         if len(parts) == 2:
@@ -1361,56 +1548,94 @@ def api_get_sampled_images_for_annotation():
                             if internal_full_date == selected_date_str:
                                 found_report_path = report_path
                                 break
-                except Exception as e:
-                    print(f"警告: 處理報告 {os.path.basename(report_path)} 時發生錯誤: {e}")
-                    continue
+                except Exception: continue
             
             if not found_report_path:
                 continue
 
-            # 2b. 設定固定的隨機種子，確保每次抽樣結果都一樣
-            session_seed = f"{selected_date_str}-{student_name}"
-            random.seed(session_seed)
-
-            # 2c. 執行智慧抽樣
             with open(found_report_path, 'r', encoding='utf-8') as f:
                 report_data = json.load(f)
 
-            high_confidence_images = []
-            low_confidence_images = []
+            # --- 【【【 核心修改邏輯開始 】】】 ---
+
+            # 2b. 建立一個包含所有圖片資訊和索引的完整列表
+            all_images_info = []
+            current_index = 0
             for batch in report_data.get("detailed_sequence_analysis", []):
+                # 確保 analysis 和 per_image_highlights 存在且是列表
+                analysis_data = batch.get("analysis", {})
+                highlights = analysis_data.get("per_image_highlights", []) if isinstance(analysis_data, dict) else []
+
                 for i, image_filename in enumerate(batch.get("image_filenames_in_batch", [])):
                     try:
-                        highlight = batch["analysis"]["per_image_highlights"][i]
+                        highlight = highlights[i]
                         confidence = highlight.get("confidence", 0.0)
                         original_behavior_raw = highlight.get("behavior_category", "未知")
                         original_behavior = original_behavior_raw[0] if isinstance(original_behavior_raw, list) else original_behavior_raw
                         
-                        image_info = {
+                        all_images_info.append({
                             "report_filename": os.path.basename(found_report_path),
                             "image_filename": image_filename,
                             "original_behavior": original_behavior,
-                            "student_name": student_name
-                        }
-
-                        if confidence >= 0.95:
-                            high_confidence_images.append(image_info)
-                        else:
-                            low_confidence_images.append(image_info)
-                    except (IndexError, KeyError) as e:
-                        print(f"警告: 處理報告 {os.path.basename(found_report_path)} 中的批次資料時出錯: {e}")
+                            "student_name": student_name,
+                            "confidence": confidence,
+                            "global_index": current_index # <--- 關鍵：為每張圖分配一個全局唯一索引
+                        })
+                        current_index += 1
+                    except (IndexError, KeyError, TypeError):
                         continue
             
-            high_sample_size = min(int(len(high_confidence_images) * 0.1), len(high_confidence_images))
-            low_sample_size = min(int(len(low_confidence_images) * 0.9), len(low_confidence_images))
-            sampled_high = random.sample(high_confidence_images, k=high_sample_size)
-            sampled_low = random.sample(low_confidence_images, k=low_sample_size)
+            if not all_images_info:
+                continue
             
-            final_sample_list = sampled_high + sampled_low
-            random.shuffle(final_sample_list)
+            # 2c. 根據目標總數，計算需要抽取的「關鍵幀」數量
+            # 每個關鍵幀會帶來 (1 + 2 * CONTEXT_WINDOW) 張圖片
+            num_keyframes_to_sample = round(TARGET_TOTAL_SAMPLES / (1 + 2 * CONTEXT_WINDOW))
 
-            if final_sample_list:
-                all_students_sampled_images[student_name] = final_sample_list
+            # 2d. 像以前一樣，進行分層置信度抽樣，但這次是抽「關鍵幀」
+            random.seed(f"{selected_date_str}-{student_name}") # 固定種子
+            high_confidence_keyframes = [img for img in all_images_info if img['confidence'] >= 0.95]
+            low_confidence_keyframes = [img for img in all_images_info if img['confidence'] < 0.95]
+
+            # 根據 10/90 比例計算各自需要抽多少關鍵幀
+            num_high = round(num_keyframes_to_sample * 0.1)
+            num_low = num_keyframes_to_sample - num_high
+
+            sampled_high_keys = random.sample(high_confidence_keyframes, k=min(num_high, len(high_confidence_keyframes)))
+            sampled_low_keys = random.sample(low_confidence_keyframes, k=min(num_low, len(low_confidence_keyframes)))
+            
+            final_keyframes = sampled_high_keys + sampled_low_keys
+            
+            # 2e. 擴展上下文並去重
+            final_sample_indices = set()
+            for keyframe in final_keyframes:
+                start_index = max(0, keyframe['global_index'] - CONTEXT_WINDOW)
+                end_index = min(len(all_images_info), keyframe['global_index'] + CONTEXT_WINDOW + 1)
+                for i in range(start_index, end_index):
+                    final_sample_indices.add(i)
+            
+            # 2f. 根據索引提取最終的圖片列表，並保持時間順序
+            final_sample_list = [all_images_info[i] for i in sorted(list(final_sample_indices))]
+
+            # 2g. 預計算標註狀態 (與您現有邏輯相同)
+            metadata = report_data.get('report_metadata', {})
+            date_str_internal = metadata.get('report_generation_time')
+            student_num = metadata.get('student_number')
+            processed_sample_list = []
+            for image_data in final_sample_list:
+                image_full_path = None
+                if date_str_internal and student_num and date_str_internal != "unknown" and student_num != "unknown":
+                    date_folder = date_str_internal.replace('/', '')
+                    student_id_folder = f"ID_{student_num}"
+                    base_path = r'C:\Users\User\Desktop\test\student_week_photo'
+                    image_full_path = os.path.join(base_path, date_folder, student_id_folder, 'Keyframes', image_data['image_filename']).replace('/', '\\')
+                image_data['is_tagged'] = bool(image_full_path and image_full_path in historical_annotations)
+                processed_sample_list.append(image_data)
+
+            # --- 【【【 核心修改邏輯結束 】】】 ---
+
+            if processed_sample_list:
+                all_students_sampled_images[student_name] = processed_sample_list
 
     except Exception as e:
         import traceback
@@ -1418,7 +1643,7 @@ def api_get_sampled_images_for_annotation():
         print(traceback.format_exc())
         return jsonify({"error": "伺服器在抽樣圖片時發生內部錯誤。"}), 500
 
-    # --- 步驟 3: 將抽樣列表和個人歷史標註整合後，一次性返回 ---
+    # --- 步驟 3: 返回整合後的數據 (不變) ---
     return jsonify({
         "sampled_images": all_students_sampled_images,
         "historical_annotations": historical_annotations

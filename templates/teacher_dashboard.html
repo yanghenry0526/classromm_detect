@@ -152,7 +152,15 @@
             <div id="annotationInterface" style="display: none;">
                 <div class="annotation-header">
                     <h4 id="annotationStudentName"></h4>
-                    <span id="annotationProgress" class="progress-indicator"></span>
+                    <div class="navigation-controls">
+                        <span id="annotationProgress" class="progress-indicator"></span>
+                        <!-- 狀態篩選器按鈕組 -->
+                        <div id="annotationFilter" class="filter-group">
+                            <button class="filter-btn active" data-filter="all">全部</button>
+                            <button class="filter-btn" data-filter="untagged">僅未標註</button>
+                            <button class="filter-btn" data-filter="tagged">僅已標註</button>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="image-navigation-container">
@@ -163,14 +171,14 @@
                         <div id="annotationStatusOverlay" class="annotation-status-overlay" style="display: none;">
                             <span>✓ 已校準</span>
                         </div>
-                        
+
                     </div>
                     <button id="nextImageBtn" class="image-nav-btn">下一張 ▶</button>
                 </div>
 
                 <div class="annotation-form">
                     <div class="form-group">
-                        <label>當時課堂情境 : 藍色位置為學生、紅色位置危老師</label>
+                        <label>當時課堂情境 : 藍色位置為學生、紅色位置為老師</label>
                         <div id="classroomLayoutVisualizer" class="classroom-layout-visualizer">
                             <!-- 學生座位區 -->
                             <div class="seating-chart">
@@ -225,8 +233,41 @@
                     </div>
                     
                     <div class="form-group">
-                        <label for="annoCorrectBehavior">請選擇您判斷的行為:</label>
-                        <select id="annoCorrectBehavior" name="correct_behavior"></select>
+                        <label>請選擇您判斷的行為:</label>
+                        <!-- 【【【 全新的行為選擇器結構 】】】 -->
+                        <div id="behaviorSelector" class="behavior-selector-container">
+                            <!-- 內容將由 JavaScript 動態生成 -->
+                            <div class="behavior-category-column">
+                                <h4>--視線--</h4>
+                                <div class="behavior-buttons-wrapper" data-category="視線 (Gaze)">
+                                    <!-- JS 會在這裡填入按鈕 -->
+                                </div>
+                            </div>
+                            <div class="behavior-category-column">
+                                <h4>--肢體(手部)--</h4>
+                                <div class="behavior-buttons-wrapper" data-category="肢體(手部) (Hand)">
+                                    <!-- JS 會在這裡填入按鈕 -->
+                                </div>
+                            </div>
+                            <div class="behavior-category-column">
+                                <h4>--身體姿態--</h4>
+                                <div class="behavior-buttons-wrapper" data-category="身體姿態 (Posture)">
+                                    <!-- JS 會在這裡填入按鈕 -->
+                                </div>
+                            </div>
+                            <div class="behavior-category-column">
+                                <h4>--互動--</h4>
+                                <div class="behavior-buttons-wrapper" data-category="互動 (Interaction)">
+                                    <!-- JS 會在這裡填入按鈕 -->
+                                </div>
+                            </div>
+                            <div class="behavior-category-column">
+                                <h4>--其他狀態--</h4>
+                                <div class="behavior-buttons-wrapper" data-category="其他狀態 (Other)">
+                                    <!-- JS 會在這裡填入按鈕 -->
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- <div class="form-group">

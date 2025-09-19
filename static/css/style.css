@@ -2081,3 +2081,149 @@ option:hover {
 .annotation-status-overlay span {
     margin-left: 8px;
 }
+
+/* ========================================================================= */
+/* ★★★ 學生列表進度條樣式 (新增) ★★★ */
+/* ========================================================================= */
+
+/* 讓 li 元素能容納多行內容 */
+#annotationStudentList li {
+    display: flex;
+    flex-wrap: wrap; /* 允許換行 */
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px; /* 增加垂直空間 */
+}
+
+/* 進度條容器的樣式 */
+.progress-container {
+    width: 100%; /* 佔滿整行寬度 */
+    height: 8px;
+    background-color: #e9ecef; /* 淺灰色軌道 */
+    border-radius: 4px;
+    margin-top: 8px; /* 與上方文字拉開距離 */
+    overflow: hidden; /* 確保圓角效果 */
+}
+
+/* 進度條本身的樣式 */
+.progress-bar {
+    height: 100%;
+    background-color: #28a745; /* 醒目的成功綠色 */
+    border-radius: 4px;
+    transition: width 0.4s ease-in-out; /* 平滑的寬度變化動畫 */
+}
+
+/* 進度文字的樣式 */
+.progress-text {
+    font-size: 0.8em;
+    color: #6c757d; /* 柔和的灰色文字 */
+    margin-top: 4px;
+    width: 100%; /* 佔滿一行，顯示在進度條下方 */
+    text-align: right; /* 靠右對齊 */
+}
+
+/* ========================================================================= */
+/* ★★★ 狀態篩選器按鈕樣式 (新增) ★★★ */
+/* ========================================================================= */
+
+.annotation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.navigation-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px; /* 讓進度文字和篩選器之間有點間距 */
+}
+
+.filter-group {
+    display: flex;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.filter-btn {
+    background-color: #ffffff;
+    border: none;
+    border-left: 1px solid #ced4da;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 0.9em;
+    color: #6c757d;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.filter-group .filter-btn:first-child {
+    border-left: none;
+}
+
+.filter-btn:hover {
+    background-color: #e9ecef;
+}
+
+/* 被選中時的樣式 */
+.filter-btn.active {
+    background-color: #007bff;
+    color: white;
+}
+
+/* --- 新增的行為選擇器樣式 --- */
+
+.behavior-selector-container {
+    display: flex; /* 關鍵：讓分類欄位水平排列 */
+    justify-content: space-between; /* 均勻分佈各欄 */
+    gap: 15px; /* 欄位之間的間距 */
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+}
+
+.behavior-category-column {
+    display: flex;
+    flex-direction: column; /* 讓標題和按鈕垂直排列 */
+    align-items: center; /* 標題居中 */
+    flex-grow: 1; /* 讓每一欄都嘗試佔據相同寬度 */
+}
+
+.behavior-category-column h4 {
+    margin-bottom: 10px;
+    font-size: 14px;
+    color: #555;
+    white-space: nowrap; /* 防止標題換行 */
+}
+
+.behavior-buttons-wrapper {
+    display: flex;
+    flex-direction: column; /* 讓行為按鈕垂直堆疊 */
+    gap: 8px; /* 按鈕之間的間距 */
+    width: 100%;
+}
+
+.behavior-btn {
+    padding: 8px 10px;
+    border: 1px solid #ddd;
+    background-color: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+    font-size: 14px;
+}
+
+.behavior-btn:hover {
+    background-color: #e9e9e9;
+    border-color: #bbb;
+}
+
+/* 當按鈕被選中時的樣式 */
+.behavior-btn.active {
+    background-color: #007bff;
+    color: #fff;
+    border-color: #0056b3;
+    font-weight: bold;
+}
