@@ -3,6 +3,9 @@
 // --- 全局變量 ---
 let allStudentData = []; // 用於緩存從API獲取的所有學生數據
 let taggingSessionData = [];
+
+let focusChartInstance = null;
+
 let behaviorChartInstance = null;
 let taggedImageIdentifiers = new Set();
 const BATCH_SIZE = 50;
@@ -11,6 +14,9 @@ let annotationData = {};
 let humanAnnotationSessionData = []; 
 let currentAnnotationList = [];
 let currentAnnotationIndex = 0;
+
+let currentSequenceIndex = 0;   // 【新增】代表當前是第幾個序列
+let sequences = [];             // 【新增】用來存放所有序列的陣列
 
 let filteredAnnotationList = []; // 存放篩選後的圖片列表
 let currentFilter = 'all';     // 追蹤當前的篩選狀態, 預設為 'all'
@@ -55,10 +61,10 @@ const BEHAVIOR_CATEGORIES_GROUPED = {
         "目視教師", "目視黑板", "目視書本/筆記", "目視同學", "目視他處"
     ],
     "肢體(手部) (Hand)": [
-        "做筆記", "翻書", "觸摸臉部", "觸摸頭髮"
+        "做筆記", "翻書", "觸摸臉部", "觸摸頭髮", "托腮"
     ],
     "身體姿態 (Posture)": [
-        "坐姿直立", "身體前傾", "身體後靠", "低頭(非學習)", "趴睡", "托腮"
+        "坐姿直立", "身體前傾", "身體後靠", "低頭(非學習)", "趴睡"
     ],
     "互動 (Interaction)": [
         "主動舉手", "被動舉手"
@@ -147,7 +153,7 @@ function populateWebActivityTab(data) {
     
     data.forEach(student => {
         const row = tableBody.insertRow();
-        row.insertCell().textContent = student.student_name || 'N/A';
+        row.insertCell().textContent = `ID: ${student.student_number}` || 'N/A'; 
         row.insertCell().textContent = student.total_general_clicks;
         
         const timeCell = row.insertCell();
@@ -574,6 +580,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const exportAnnotationsButton = document.getElementById('exportAnnotationsButton');
     const annoCorrectBehaviorSelect = document.getElementById('annoCorrectBehavior');
 
+    const prevSequenceBtn = document.getElementById('prevSequenceBtn');
+    const nextSequenceBtn = document.getElementById('nextSequenceBtn');
 
 
     const filterButtons = document.querySelectorAll('#annotationFilter .filter-btn');
@@ -587,8 +595,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // 【新增上一張/下一張按鈕的事件監聽】
-    prevImageBtn.addEventListener('click', () => navigate('prev'));
-    nextImageBtn.addEventListener('click', () => navigate('next'));
+    prevSequenceBtn.addEventListener('click', () => displaySequence(currentSequenceIndex - 1));
+    nextSequenceBtn.addEventListener('click', () => displaySequence(currentSequenceIndex + 1));
 
     // --- START: 互動式評分條初始化 ---
     const confidenceSlider = document.getElementById('confidenceSlider');
@@ -744,29 +752,28 @@ document.addEventListener('DOMContentLoaded', function() {
         Promise.all([
             fetch(summaryApiUrl).then(res => res.ok ? res.json() : Promise.reject(new Error(`API Error: ${summaryApiUrl}`))),
             fetch(behaviorApiUrl).then(res => res.ok ? res.json() : Promise.reject(new Error(`API Error: ${behaviorApiUrl}`))),
-            fetch(comprehensiveApiUrl).then(res => res.ok ? res.json() : Promise.reject(new Error(`API Error: ${comprehensiveApiUrl}`))),
+            fetch(comprehensiveApiUrl).then(res => res.ok ? res.json() : Promise.reject(new Error(`API Error: ${comprehensiveApiUrl}`))), // 新增
             fetch(samplingApiUrl).then(res => res.ok ? res.json() : Promise.reject(new Error(`API Error: ${samplingApiUrl}`)))
         ])
+        // 【【【 修改回調函數以接收新的 comprehensiveData 】】】
         .then(([summaryData, behaviorData, comprehensiveData, sampledAndHistoryData]) => { 
-            // 檢查各 API 是否返回錯誤
+            // 檢查錯誤 (邏輯不變)
             if (summaryData.error) throw new Error(summaryData.error);
             if (behaviorData.error) throw new Error(behaviorData.error);
             if (comprehensiveData.error) throw new Error(comprehensiveData.error);
             if (sampledAndHistoryData.error) throw new Error(sampledAndHistoryData.error);
             
-            // 【核心修改】將後端返回的整合數據拆分並存入全局變量
+            // 處理抽樣數據 (邏輯不變)
             const sampledData = sampledAndHistoryData.sampled_images;
             historicalAnnotationData = sampledAndHistoryData.historical_annotations;
-
-            // 將 annotationData 指向抽樣出的圖片列表，供後續使用
             annotationData = sampledData; 
             
-            // 將拆分後的抽樣數據 (sampledData) 傳遞給渲染函數
+            // 調用統一的渲染主函數，並傳入新的數據
             renderAllTabs(summaryData, behaviorData, comprehensiveData, sampledData);
 
             loadingMessage.style.display = 'none';
             
-            // 預設打開第一個頁籤
+            // 預設打開第一個頁籤 (邏輯不變)
             document.getElementById('webActivityTab').style.display = 'block';
             document.querySelector('.tab-button[onclick*="webActivityTab"]').classList.add('active');
         })
@@ -792,17 +799,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // --- 數據渲染主函數 ---
-    function renderAllTabs(summaryData, behaviorData, comprehensiveData, sampledData) { // 【修正】接收第四個參數 sampledData
-        // 渲染所有舊的頁籤 (這部分不變)
+    function renderAllTabs(summaryData, behaviorData, comprehensiveData, sampledData) {
+        // 渲染所有舊的頁籤
         populateWebActivityTab(summaryData);
         populateBehaviorStatsTab(summaryData);
         populateImageExplorerTab(summaryData);
         populateCrossStudentTab(behaviorData);
+        
+        // 【【【 在這裡加上這一行！ 】】】
         populateComprehensiveReportTab(comprehensiveData); 
         
-        // 【修正】將抽樣數據 (sampledData) 傳遞給新的渲染函數
+        // 渲染校準工作台
         populateAnnotationWorkbenchTab(sampledData); 
-    }
+}
     // --- 新增：聚焦與標註相關的所有函數 ---
 
     /**
@@ -847,37 +856,39 @@ document.addEventListener('DOMContentLoaded', function() {
         annotationInterface.style.display = 'none';
         annotationPlaceholder.style.display = 'block';
 
-        for (const studentName in data) {
-            const images = data[studentName];
-            
-            // 【【【 核心修改：在這裡直接、同步地計算進度 】】】
-            const total = images.length;
-            // 利用後端返回的 'is_tagged' 標記來計數
-            const tagged = images.filter(img => img.is_tagged).length;
+        for (const studentId in data) {
+            const currentStudentId = studentId;
+            const currentSequences = data[studentId]; // 變數名改為 currentSequences 更清晰
 
-            // 將計算好的進度存入全局變量，供 saveCurrentAnnotation 更新使用
-            studentProgress[studentName] = { tagged: tagged, total: total };
+            // 【【【核心修正點】】】
+            // 舊的計數方式是 const total = currentSequences.length; (這只會計算序列的數量)
+            // 新的計數方式是使用 reduce 方法，將每個序列 (sequence) 的長度 (sequence.length) 累加起來。
+            const totalImages = currentSequences.reduce((sum, sequence) => sum + sequence.length, 0);
+
+            // 計算已標註的總張數，也需要遍歷所有序列
+            const taggedImages = currentSequences.flat().filter(img => img.is_tagged).length;
+
+            studentProgress[currentStudentId] = { tagged: taggedImages, total: totalImages };
 
             const li = document.createElement('li');
-            // 使用 dataset 來儲存學生姓名，方便後續查找和點擊事件
-            li.dataset.studentName = studentName;
+            li.dataset.studentId = currentStudentId;
+            li.dataset.studentName = currentStudentId;
             
-            // 根據計算出的進度，直接生成包含進度條的完整 HTML 結構
-            const percentage = total > 0 ? (tagged / total) * 100 : 0;
+            // 使用新的 totalImages 變數來計算百分比和顯示文字
+            const percentage = totalImages > 0 ? (taggedImages / totalImages) * 100 : 0;
             li.innerHTML = `
-                <span>${studentName} (${total} 張)</span>
+                <span>ID: ${currentStudentId} (${totalImages} 張)</span>
                 <div class="progress-container">
                     <div class="progress-bar" style="width: ${percentage}%;"></div>
                 </div>
-                <span class="progress-text">${tagged} / ${total}</span>
+                <span class="progress-text">${taggedImages} / ${totalImages}</span>
             `;
             
-            // 綁定點擊事件
             li.onclick = () => {
                 document.querySelectorAll('#annotationStudentList li.active').forEach(el => el.classList.remove('active'));
                 li.classList.add('active');
-                // 呼叫（簡化後的）啟動函數
-                startAnnotationForStudent(studentName, images);
+                // 傳遞給啟動函數的仍然是完整的序列列表
+                startAnnotationForStudent(currentStudentId, currentSequences);
             };
             annotationStudentList.appendChild(li);
         }
@@ -954,7 +965,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (nextIndexInFiltered >= 0 && nextIndexInFiltered < filteredAnnotationList.length) {
             const nextImage = filteredAnnotationList[nextIndexInFiltered];
             const newMasterIndex = currentAnnotationList.indexOf(nextImage);
-            currentAnnotationIndex = newMasterIndex;
+            currentAnnotationIndex = newMasterIndex; 
             displayAnnotationImage(currentAnnotationIndex);
         }
     }
@@ -964,78 +975,152 @@ document.addEventListener('DOMContentLoaded', function() {
      * @param {string} studentName - 被選中的學生姓名。
      * @param {Array} images - 該學生的待標註圖片列表。
      */
-    function startAnnotationForStudent(studentName, images) {
-        currentAnnotationList = images;
-        
-        currentFilter = 'all';
-        document.querySelectorAll('#annotationFilter .filter-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.filter === 'all');
-        });
+    function startAnnotationForStudent(studentId, images) {
+        // --- 【【【核心修改點】】】 ---
+        // 後端已經將圖片預先分好序列（一個包含多個數組的數組），
+        // 所以我們不再需要前端的複雜時間戳判斷邏輯。
+        // 直接將後端傳來的 'images' (現在是 sequences) 賦值給全局變量即可。
+        sequences = images;
 
-        applyFilter();
-        
-        // --- 自動跳轉邏輯 (強化版) ---
-        // 尋找第一張「未標註」的圖片在「完整列表」中的索引
-        const firstUnTaggedIndex = currentAnnotationList.findIndex(imageData => {
-            // 為了準確判斷，我們需要檢查三個地方：
-            // 1. 後端返回的 is_tagged 狀態
-            // 2. 本輪會話 humanAnnotationSessionData 中是否有記錄
-            // 3. 歷史記錄 historicalAnnotationData 中是否有記錄 (作為備用檢查)
-            const path = buildImagePath(imageData, {}); // 使用簡化 context 進行路徑構建
-            const inSession = humanAnnotationSessionData.some(item => item.image_path === path);
-            const inHistory = historicalAnnotationData[path];
-            
-            return !imageData.is_tagged && !inSession && !inHistory;
-        });
-        
-        currentAnnotationIndex = (firstUnTaggedIndex !== -1) ? firstUnTaggedIndex : 0;
+        if (!sequences || sequences.length === 0) {
+            annotationInterface.style.display = 'none';
+            annotationPlaceholder.style.display = 'block';
+            annotationPlaceholder.textContent = '此學生無待標註影像。';
+            return;
+        }
+
+        currentSequenceIndex = 0;
+        currentAnnotationIndex = 0;
 
         annotationPlaceholder.style.display = 'none';
         annotationInterface.style.display = 'block';
-        document.getElementById('annotationStudentName').textContent = `正在標註: ${studentName}`;
+        document.getElementById('annotationStudentName').textContent = `正在標註 ID: ${studentId}`;
         
+        // 直接開始顯示第一個序列
+        displaySequence(currentSequenceIndex);
+    }
+
+    function displaySequence(seqIndex) {
+        if (seqIndex < 0 || seqIndex >= sequences.length) return;
+        
+        currentSequenceIndex = seqIndex;
+        currentAnnotationList = sequences[currentSequenceIndex];
+        currentAnnotationIndex = 0; // 默認選中序列的第一張圖
+        
+        updateSequenceNavButtons();
+        renderThumbnails();
         displayAnnotationImage(currentAnnotationIndex);
+    }
+
+    function renderThumbnails() {
+        const container = document.getElementById('thumbnailContainer');
+        container.innerHTML = '';
         
-        if (currentAnnotationIndex > 0) {
-            console.log(`已為您自動跳轉到第一張未完成的圖片 (第 ${currentAnnotationIndex + 1} 張)。`);
+        // --- 【【【 核心修改邏輯開始 】】】 ---
+        const MAX_THUMBNAILS = 5; // 設定縮圖列表的最大數量
+        const halfWindow = Math.floor(MAX_THUMBNAILS / 2);
+
+        let startIndex = 0;
+        let endIndex = currentAnnotationList.length;
+
+        // 只有當序列總長度超過最大限制時，才進行切片
+        if (currentAnnotationList.length > MAX_THUMBNAILS) {
+            // 計算理想的起始和結束索引，確保當前圖片 (currentAnnotationIndex) 盡量在中間
+            startIndex = Math.max(0, currentAnnotationIndex - halfWindow);
+            endIndex = startIndex + MAX_THUMBNAILS;
+
+            // 邊界情況處理：如果計算出的結束索引超出了陣列範圍，則進行調整
+            if (endIndex > currentAnnotationList.length) {
+                endIndex = currentAnnotationList.length;
+                startIndex = endIndex - MAX_THUMBNAILS;
+            }
         }
+        
+        // 從完整的序列中，只截取我們計算好的範圍來顯示
+        const thumbnailsToRender = currentAnnotationList.slice(startIndex, endIndex);
+        
+        thumbnailsToRender.forEach((imageData, relativeIndex) => {
+            // 關鍵：我們需要知道這張縮圖在【完整序列】中的真實索引
+            const trueIndex = startIndex + relativeIndex;
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'thumbnail-wrapper';
+            
+            // 高亮當前正在標註的主圖
+            if (trueIndex === currentAnnotationIndex) {
+                wrapper.classList.add('active');
+            }
+
+            // 點擊縮圖時，必須使用它在完整序列中的真實索引來切換主圖
+            wrapper.onclick = () => {
+                displayAnnotationImage(trueIndex);
+            };
+
+            const img = document.createElement('img');
+            img.src = `/api/get_sequence_image?report_file=${encodeURIComponent(imageData.report_filename)}&image_file=${encodeURIComponent(imageData.image_filename)}`;
+            
+            if (imageData.is_tagged) {
+                const icon = document.createElement('span');
+                icon.className = 'status-icon';
+                icon.textContent = '✓';
+                wrapper.appendChild(icon);
+            }
+
+            wrapper.appendChild(img);
+            container.appendChild(wrapper);
+        });
+        // --- 【【【 核心修改邏輯結束 】】】 ---
     }
     
     // --- 【全新函數】開始為特定學生標註 ---
+
     async function displayAnnotationImage(index) {
-        // 1. 基本檢查與變數設定
-        if (index < 0 || index >= currentAnnotationList.length) return;
-
-        const imageData = currentAnnotationList[index];
-        const imageEl = document.getElementById('annotationImage');
-        const statusOverlay = document.getElementById('annotationStatusOverlay'); // 獲取狀態覆蓋層元素
-        
-        document.getElementById('annotationProgress').textContent = `影像 ${index + 1} / ${currentAnnotationList.length}`;
-        imageEl.src = ""; 
-
-        // 在函數開頭，總是先隱藏覆蓋層，為動畫做準備
-        if (statusOverlay) {
-            statusOverlay.style.opacity = '0';
-            // 使用 setTimeout 確保在下一次顯示前，display 屬性不會阻礙動畫
-            setTimeout(() => { if (statusOverlay.style.opacity === '0') statusOverlay.style.display = 'none'; }, 300);
+        // --- 步驟 1: 初始化與邊界檢查 ---
+        if (index < 0 || index >= currentAnnotationList.length) {
+            console.warn(`displayAnnotationImage 嘗試訪問無效索引: ${index}`);
+            return; // 如果索引超出範圍，則安全退出，防止錯誤
         }
+        currentAnnotationIndex = index;
 
-        // 2. 定義更新教室情境圖的輔助函數
+        // --- 步驟 2: 獲取核心數據與 DOM 元素 ---
+        const imageData = currentAnnotationList[currentAnnotationIndex];
+        
+        // 預先獲取所有需要操作的 DOM 元素，提高效率
+        const imageEl = document.getElementById('annotationImage');
+        const statusOverlay = document.getElementById('annotationStatusOverlay');
+        const filenameEl = document.getElementById('mainImageFilename');
+        const progressEl = document.getElementById('annotationProgress');
+        const behaviorSelector = document.getElementById('behaviorSelector');
+        const confidenceSlider = document.getElementById('confidenceSlider');
+        
+        // 【修改】只獲取用於顯示課堂狀態標題的元素
+        const classroomStateTextEl = document.getElementById('classroomStateText');
+
+        // --- 步驟 3: 重置 UI 到「載入中」狀態 ---
+        renderThumbnails(); // 更新縮圖列表，高亮當前圖片
+        
+        imageEl.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"; // 顯示一個透明像素
+        
+        filenameEl.textContent = imageData.image_filename;
+        progressEl.textContent = `序列 ${currentSequenceIndex + 1} / ${sequences.length} - 影像 ${index + 1} / ${currentAnnotationList.length}`;
+
+        // 重置所有上下文相關的 UI
+        if (classroomStateTextEl) classroomStateTextEl.textContent = '查詢中...';
+        
+        
+        // --- 步驟 4: 定義內嵌輔助函數 (保持程式碼封裝性) ---
+
+        // 輔助函數 A: 更新教室佈局圖（學生座位與教師位置）
         const updateClassroomLayout = (studentPos, teacherPos) => {
             const teacherAreaWrapper = document.querySelector('.position-zone-wrapper');
             const statusMessage = document.getElementById('teacherPositionStatus');
-            if (!teacherAreaWrapper || !statusMessage) {
-                console.error("錯誤：找不到教室佈局圖的必要元素！");
-                return;
-            }
+            if (!teacherAreaWrapper || !statusMessage) return;
 
-            // 重置所有狀態
             document.querySelectorAll('.desk.student-active').forEach(d => d.classList.remove('student-active'));
             document.querySelectorAll('.position-zone.teacher-active').forEach(z => z.classList.remove('teacher-active'));
             teacherAreaWrapper.classList.remove('unknown-state');
             statusMessage.style.display = 'none';
 
-            // 處理學生位置
             if (studentPos && studentPos !== '未知' && studentPos !== '獲取失敗') {
                 const rowMap = { '一': '1', '二': '2', '三': '3', '四': '4', '五': '5' };
                 const colMap = { '左邊': 'left', '中間': 'center', '右邊': 'right' };
@@ -1049,146 +1134,192 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
 
-            // 處理教師位置
-            const perspectiveMap = { "右": "左", "中間偏右": "偏左", "中": "中", "中間": "中", "中間偏左": "偏右", "左": "右" };
+            const perspectiveMap = { 
+                "左側": "右", "中間偏左": "偏右", "中間": "中",
+                "中間偏右": "偏左", "右側": "左", "教室前方": "中"
+            };
             const mappedPosition = teacherPos ? perspectiveMap[teacherPos] : null;
-            
             if (mappedPosition) {
                 const teacherZone = document.querySelector(`.position-zone[data-position="${mappedPosition}"]`);
                 if (teacherZone) teacherZone.classList.add('teacher-active');
             } else {
                 teacherAreaWrapper.classList.add('unknown-state');
-                statusMessage.textContent = '教師位置資訊無法判斷';
+                statusMessage.textContent = teacherPos || '教師位置未知';
                 statusMessage.style.display = 'block';
             }
         };
-
-        // 3. 定義更新互動式評分條的輔助函數
+        
+        // 輔助函數 B: 更新信度評分條
         const setSliderValue = (value) => {
-            const confidenceSlider = document.getElementById('confidenceSlider');
             if (!confidenceSlider) return;
-
             const ratingBlocks = confidenceSlider.querySelectorAll('.rating-block');
             const numericValue = parseInt(value) || 0;
-            
             confidenceSlider.dataset.selectedValue = numericValue;
-            
             ratingBlocks.forEach(b => {
                 const blockValue = parseInt(b.dataset.value);
-                b.classList.toggle('active', blockValue === numericValue);
-                b.classList.toggle('highlight', blockValue <= numericValue && blockValue > 0);
+                b.classList.remove('active', 'highlight');
+                if (blockValue === numericValue) b.classList.add('active');
+                if (blockValue <= numericValue && blockValue > 0) b.classList.add('highlight');
             });
         };
+        
+        // 重置情境圖與信度條
+        updateClassroomLayout(null, null);
+        setSliderValue(null);
 
-        // 4. 異步獲取上下文資訊並更新 UI
+
+        // --- 步驟 5: 並行地異步獲取所有上下文資訊 ---
         let contextData = {};
         try {
-            updateClassroomLayout(null, null);
-            const response = await fetch(`/api/teacher/get_image_context?report_file=${encodeURIComponent(imageData.report_filename)}&image_file=${encodeURIComponent(imageData.image_filename)}`);
-            contextData = response.ok ? await response.json() : {};
+            const selectedDate = document.getElementById('dateSelector').value;
+            const reportFile = encodeURIComponent(imageData.report_filename);
+            const imageFile = encodeURIComponent(imageData.image_filename);
+
+            // 使用 Promise.all 並行發送所有請求，提升載入速度
+            const [contextResponse, positionResponse, stateResponse] = await Promise.all([
+                fetch(`/api/teacher/get_image_context?report_file=${reportFile}&image_file=${imageFile}`),
+                fetch(`/api/teacher/get_dynamic_teacher_position?date=${selectedDate}&image_file=${imageFile}`),
+                fetch(`/api/teacher/get_classroom_state?date=${selectedDate}&image_file=${imageFile}`)
+            ]);
+
+            // 處理第一個請求：圖片基本上下文 (學生座位等)
+            contextData = contextResponse.ok ? await contextResponse.json() : {};
+            
+            // 處理第二個請求：動態教師位置
+            const positionData = positionResponse.ok ? await positionResponse.json() : { position: "請求失敗" };
+            contextData.teacher_position = positionData.position;
+
+            // 處理第三個請求：課堂活動狀態
+            if (stateResponse.ok) {
+                const stateData = await stateResponse.json();
+                // 【修改】只更新標題，不再更新詳細描述
+                if(classroomStateTextEl) classroomStateTextEl.textContent = stateData.classroom_state || '未知';
+            } else {
+                if(classroomStateTextEl) classroomStateTextEl.textContent = '查詢失敗';
+            }
+
+            // 使用組合好的、最準確的數據來更新UI
             updateClassroomLayout(contextData.seating_position, contextData.teacher_position);
+
         } catch (e) {
-            updateClassroomLayout('獲取失敗', '獲取失敗');
+            console.error("獲取上下文、動態位置或課堂狀態時發生網路錯誤:", e);
+            // 如果任何一個請求失敗，都在 UI 上顯示錯誤狀態
+            updateClassroomLayout('獲取失敗', '網路錯誤');
+            if(classroomStateTextEl) classroomStateTextEl.textContent = '網路錯誤';
         }
 
-        // 5. 加載主要圖片
+
+        // --- 步驟 6: 載入主預覽圖 ---
         imageEl.src = `/api/get_sequence_image?report_file=${encodeURIComponent(imageData.report_filename)}&image_file=${encodeURIComponent(imageData.image_filename)}`;
         
-        // 6. 檢查圖片是否已標註過，並更新表單和狀態標籤
+        
+        // --- 步驟 7: 根據歷史標註狀態，更新標註工具列 ---
         const imageFullPath = buildImagePath(imageData, contextData);
         const sessionAnnotation = humanAnnotationSessionData.find(item => item.image_path === imageFullPath);
         const historicalAnnotation = historicalAnnotationData[imageFullPath];
         const finalAnnotation = sessionAnnotation || historicalAnnotation;
 
-        const behaviorSelector = document.getElementById('behaviorSelector');
-        // 先移除所有按鈕的 active 狀態，為設定新狀態做準備
         behaviorSelector.querySelectorAll('.behavior-btn').forEach(btn => btn.classList.remove('active'));
 
-        if (finalAnnotation) {
-            // --- 如果找到了標註紀錄 ---
-            // 1. 找到對應的按鈕並將其設為 'active'
-            const selectedBtn = behaviorSelector.querySelector(`.behavior-btn[data-value="${finalAnnotation.corrected_behavior}"]`);
-            if (selectedBtn) {
-                selectedBtn.classList.add('active');
-            }
-            // 2. 設定信度評分條
-            setSliderValue(finalAnnotation.calibration_confidence);
+        if (imageData.is_tagged) {
+            statusOverlay.style.display = 'flex';
+            statusOverlay.style.opacity = '1';
             
-            // ... (顯示 "已校準" 覆蓋層的程式碼維持不變) ...
-            if (statusOverlay) {
-                statusOverlay.style.display = 'flex';
-                setTimeout(() => { statusOverlay.style.opacity = '1'; }, 10);
+            if (finalAnnotation) {
+                if (finalAnnotation.corrected_behaviors && typeof finalAnnotation.corrected_behaviors === 'object') {
+                    for (const categoryKey in finalAnnotation.corrected_behaviors) {
+                        const behaviorValue = finalAnnotation.corrected_behaviors[categoryKey];
+                        const btnToActivate = behaviorSelector.querySelector(`.behavior-btn[data-value="${behaviorValue}"]`);
+                        if (btnToActivate) btnToActivate.classList.add('active');
+                    }
+                } 
+                else if (finalAnnotation.corrected_behavior && typeof finalAnnotation.corrected_behavior === 'string') {
+                    const btnToActivate = behaviorSelector.querySelector(`.behavior-btn[data-value="${finalAnnotation.corrected_behavior}"]`);
+                    if (btnToActivate) btnToActivate.classList.add('active');
+                }
+                
+                setSliderValue(finalAnnotation.calibration_confidence);
+            } else {
+                console.warn(`圖片 ${imageData.image_filename} 標記為已標註，但未找到詳細的標註數據。`);
             }
 
         } else {
-            // --- 如果沒有任何標註紀錄 ---
-            // 1. 找到 AI 原始判斷的行為按鈕並設為 'active'
-            const originalBtn = behaviorSelector.querySelector(`.behavior-btn[data-value="${imageData.original_behavior}"]`);
-            if (originalBtn) {
-                originalBtn.classList.add('active');
-            }
-            // 2. 重置信度評分條
+            statusOverlay.style.opacity = '0';
+            setTimeout(() => {
+                if (statusOverlay.style.opacity === '0') {
+                    statusOverlay.style.display = 'none';
+                }
+            }, 300);
+
+            const originalBehaviors = Array.isArray(imageData.original_behavior)
+                ? imageData.original_behavior
+                : [imageData.original_behavior];
+
+            originalBehaviors.forEach(behavior => {
+                if (behavior) {
+                    const btnToActivate = behaviorSelector.querySelector(`.behavior-btn[data-value="${behavior}"]`);
+                    if (btnToActivate) {
+                        btnToActivate.classList.add('active');
+                    }
+                }
+            });
+
             setSliderValue(null);
         }
-
-        // 7. 更新導航按鈕的狀態
-        prevImageBtn.disabled = index === 0;
-        nextImageBtn.disabled = index === currentAnnotationList.length - 1;
-
-        updateProgressUI(); 
     }
     
-    /**
-     * 儲存當前正在標註的圖片資訊。這是一個異步函數。
-     * @returns {Promise<boolean>} - 成功儲存則返回 true，失敗則返回 false。
-     */
     async function saveCurrentAnnotation() {
-        // 1. 從 UI 獲取標註員的輸入
-        const activeBtn = document.querySelector('#behaviorSelector .behavior-btn.active');
-        const selectedBehavior = activeBtn ? activeBtn.dataset.value : null;
+        // --- 步驟 1 & 2: 收集數據與驗證 (邏輯不變) ---
+        const activeButtons = document.querySelectorAll('#behaviorSelector .behavior-btn.active');
         const confidenceRating = document.getElementById('confidenceSlider')?.dataset.selectedValue;
-
-        // 【新增驗證】確保使用者有點選一個行為
-        if (!selectedBehavior) {
-            alert('請選擇一個行為！');
-            return false; // 返回 false 來中斷儲存流程
+        const mandatoryCategories = { "視線 (Gaze)": "視線", "身體姿態 (Posture)": "身體姿態" };
+        let missingCategories = [];
+        for (const categoryKey in mandatoryCategories) {
+            if (!document.querySelector(`#behaviorSelector .behavior-buttons-wrapper[data-category="${categoryKey}"] .behavior-btn.active`)) {
+                missingCategories.push(mandatoryCategories[categoryKey]);
+            }
         }
-
-        // 2. 驗證輸入
+        if (missingCategories.length > 0) {
+            alert(`儲存失敗！\n\n根據標註規則，您必須為 【${missingCategories.join('】、【')}】 類別各選擇一個行為。`);
+            return false;
+        }
         if (!confidenceRating || confidenceRating === "0") {
             alert('請評估您此次標註的信度！');
-            return false; // 如果沒有評分，則直接返回，不執行後續操作
+            return false;
         }
 
-        // 3. 獲取當前圖片的相關數據
+        // --- 【【【 核心修改點 1：在所有操作之前，先記錄當前圖片的原始標註狀態 】】】 ---
         const imageData = currentAnnotationList[currentAnnotationIndex];
+        // 檢查這張圖片在被點擊「儲存」按鈕的這一刻，是否已經是「已標註」狀態。
+        const wasAlreadyTagged = imageData.is_tagged === true;
+
+        // --- 步驟 3 & 4: 組合數據、獲取上下文、建立路徑 (邏輯不變) ---
+        const correctedBehaviorsObject = {};
+        activeButtons.forEach(btn => {
+            const categoryLong = btn.closest('.behavior-buttons-wrapper').dataset.category;
+            const behavior = btn.dataset.value;
+            correctedBehaviorsObject[categoryLong.split(' ')[0]] = behavior;
+        });
+
         let fullContextData = {};
         try {
             const response = await fetch(`/api/teacher/get_image_context?report_file=${encodeURIComponent(imageData.report_filename)}&image_file=${encodeURIComponent(imageData.image_filename)}`);
-            if (response.ok) {
-                fullContextData = await response.json();
-            }
+            if (response.ok) fullContextData = await response.json();
         } catch (e) {
-            console.error("獲取上下文時出錯:", e);
+            console.error("獲取上下文時發生網路錯誤:", e);
         }
         
-        // 4. 構建唯一的圖片路徑標識符
         const imageFullPath = buildImagePath(imageData, fullContextData);
         if (!imageFullPath) {
             alert("錯誤：無法建構有效的圖片路徑，標註無法儲存。");
             return false;
         }
 
-        // 5. 【【【 核心修改：在儲存前檢查狀態 】】】
-        // 檢查這張圖片在「本輪會話」和「歷史記錄」中是否都【未】被標註過。
-        // `isNewTag` 為 true，代表這是一次全新的完成，進度條需要 +1。
-        const isNewTag = !humanAnnotationSessionData.some(item => item.image_path === imageFullPath) && !historicalAnnotationData[imageFullPath];
-
-        // 6. 構建要儲存的標註物件
+        // --- 步驟 5: 構建儲存物件 (邏輯不變) ---
         const annotationObject = {
             image_path: imageFullPath,
             original_behavior: imageData.original_behavior,
-            corrected_behavior: selectedBehavior,
+            corrected_behaviors: correctedBehaviorsObject,
             calibration_confidence: parseInt(confidenceRating),
             student_name: imageData.student_name,
             source_report: imageData.report_filename,
@@ -1203,47 +1334,42 @@ document.addEventListener('DOMContentLoaded', function() {
                 ai_model_version: fullContextData.ai_model_version || null
             }
         };
+        
+        // --- 步驟 6: 更新前端狀態與 UI ---
 
-        // 7. 將標註物件存入「本輪會話」的數據中 (更新或新增)
+        // 6a. 更新本輪會話的暫存數據 (邏輯不變)
         const existingIndex = humanAnnotationSessionData.findIndex(item => item.image_path === imageFullPath);
         if (existingIndex > -1) {
             humanAnnotationSessionData[existingIndex] = annotationObject;
         } else {
             humanAnnotationSessionData.push(annotationObject);
         }
-        
-        // 8. 更新總的匯出計數器
         updateAnnotationCount();
 
-        // 9. 【【【 核心修改：如果是新標註，則更新進度 】】】
-        if (isNewTag) {
-            const studentName = imageData.student_name;
-            if (studentProgress[studentName]) {
-                studentProgress[studentName].tagged += 1;
-                // 呼叫我們的輔助函數來更新畫面上的進度條
-                updateStudentProgressUI(studentName);
+        // --- 【【【 核心修改點 2：使用步驟 1 記錄的狀態來決定是否增加計數 】】】 ---
+        // 只有當這張圖片之前是「未標註」狀態時，才增加進度計數。
+        if (!wasAlreadyTagged) {
+            const studentId = imageData.student_number;
+            if (studentProgress[studentId]) {
+                studentProgress[studentId].tagged += 1;
+                updateStudentProgressUI(studentId);
             }
         }
 
-        // 10. 【重要補充】同步更新前端狀態
-        if (isNewTag) {
-            currentAnnotationList[currentAnnotationIndex].is_tagged = true;
-        }
+        // 6c. 確保圖片的狀態被更新為「已標註」(邏輯不變)
+        currentAnnotationList[currentAnnotationIndex].is_tagged = true;
 
-        // 11. 儲存成功後，重新應用當前的篩選器
-        applyFilter();
-        
-        // 12. 如果當前在 '僅未標註' 模式，自動跳到篩選後列表的第一張
-        if (currentFilter === 'untagged' && filteredAnnotationList.length > 0) {
-            setTimeout(() => {
-                const nextImage = filteredAnnotationList[0];
-                currentAnnotationIndex = currentAnnotationList.indexOf(nextImage);
-                displayAnnotationImage(currentAnnotationIndex);
-            }, 300); // 延遲一點跳轉，體驗更好
-        }
-        
-        // 10. 異步操作成功，返回 true
+        // 6d. 觸發 UI 重新渲染以顯示最新狀態 (邏輯不變)
+        displayAnnotationImage(currentAnnotationIndex);
+
+        // --- 步驟 7: 返回成功 ---
         return true;
+    }
+    
+    // 【全新函數】更新序列導航按鈕的狀態
+    function updateSequenceNavButtons() {
+        document.getElementById('prevSequenceBtn').disabled = currentSequenceIndex === 0;
+        document.getElementById('nextSequenceBtn').disabled = currentSequenceIndex >= sequences.length - 1;
     }
 
     /**
@@ -1305,6 +1431,10 @@ document.addEventListener('DOMContentLoaded', function() {
     function exportHumanAnnotations() {
         if (humanAnnotationSessionData.length === 0) return;
 
+        // 從 DOM 獲取按鈕，確保變數有效
+        const exportAnnotationsButton = document.getElementById('exportAnnotationsButton');
+        if (!exportAnnotationsButton) return; // 安全檢查
+
         exportAnnotationsButton.textContent = '正在匯出...';
         exportAnnotationsButton.disabled = true;
 
@@ -1317,8 +1447,25 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             if (data.success) {
                 alert(data.message);
-                humanAnnotationSessionData = []; // 成功後清空
-                updateAnnotationCount();
+
+                // --- 【【【 核心修改邏輯開始 】】】 ---
+
+                // 1. 將本次會話中已成功匯出的數據，合併到前端的歷史數據中。
+                //    這樣 displayAnnotationImage 就能在歷史數據中找到它們了。
+                humanAnnotationSessionData.forEach(item => {
+                    // 使用圖片的完整路徑作為 key，將整個標註物件存入
+                    if (item.image_path) { // 確保 image_path 存在
+                        historicalAnnotationData[item.image_path] = item;
+                    }
+                });
+
+                // 2. 現在可以安全地清空本次會話的暫存數據了。
+                humanAnnotationSessionData = [];
+
+                // --- 【【【 核心修改邏輯結束 】】】 ---
+                
+                updateAnnotationCount(); // 更新計數器為 0
+
             } else {
                 throw new Error(data.message || '未知錯誤');
             }
@@ -1327,6 +1474,7 @@ document.addEventListener('DOMContentLoaded', function() {
             alert(`匯出失敗: ${err.message}`);
         })
         .finally(() => {
+            // 更新按鈕的文字和狀態
             exportAnnotationsButton.innerHTML = `匯出本次標註數據 (<span id="annotationCount">${humanAnnotationSessionData.length}</span>)`;
             exportAnnotationsButton.disabled = humanAnnotationSessionData.length === 0;
         });
@@ -1560,76 +1708,134 @@ window.openTeacherTab = openTeacherTab;
 
 
 function populateComprehensiveReportTab(data) {
+    // --- 步驟 1: 獲取所有需要的 DOM 元素 ---
     const container = document.getElementById('comprehensiveReportTab');
     const summaryTitle = document.getElementById('summaryTitle');
     const summaryNarrative = document.getElementById('summaryNarrative');
     const summaryKeyTakeaways = document.getElementById('summaryKeyTakeaways');
     const timelineCardsContainer = document.getElementById('timelineAnalysisCards');
-    const chartCanvas = document.getElementById('behaviorTrendChart');
+    
+    // 獲取新的圖表相關元素
+    const chartContainer = document.getElementById('focusChartContainer');
+    const chartCanvas = document.getElementById('focusPercentageChart');
 
-    summaryTitle.textContent = '';
+    // --- 步驟 2: 在開始渲染前，清空所有舊內容並顯示載入狀態 ---
+    summaryTitle.textContent = '正在加載總結...';
     summaryNarrative.textContent = '';
     summaryKeyTakeaways.innerHTML = '';
     timelineCardsContainer.innerHTML = '';
+    chartContainer.style.display = 'none'; // 先隱藏圖表容器
+    if (focusChartInstance) {
+        focusChartInstance.destroy();
+        focusChartInstance = null;
+    }
 
     const reportData = data.report_data;
 
+    // --- 步驟 3: 處理無數據的情況 ---
     if (!reportData || !reportData.timeline_analysis || reportData.timeline_analysis.length === 0) {
         container.querySelector('h3').textContent = "課堂綜合洞察報告 (無數據)";
         summaryTitle.textContent = "此日期暫無綜合報告可供分析。";
-        if (behaviorChartInstance) {
-            behaviorChartInstance.destroy();
-            behaviorChartInstance = null;
+        // 確保在無數據時，圖表相關的元素都清理乾淨
+        if (focusChartInstance) {
+            focusChartInstance.destroy();
+            focusChartInstance = null;
         }
-        return;
+        chartContainer.style.display = 'none';
+        return; // 提前結束函數
     }
     
-    // 1. 渲染宏觀總結
-    const overallSummary = reportData.overall_summary;
-    summaryTitle.textContent = overallSummary.title || "課堂總結";
-    summaryNarrative.textContent = overallSummary.narrative_insight || "無敘事性洞察。";
+    // --- 步驟 4: 成功獲取報告數據，開始渲染 ---
     
-    let takeawaysHtml = '';
-    if (overallSummary.key_takeaways) {
-        takeawaysHtml += `<p><strong>教學亮點:</strong> ${escapeHtmlJs(overallSummary.key_takeaways.highlight || 'N/A')}</p>`;
-        takeawaysHtml += `<p><strong>關鍵挑戰:</strong> ${escapeHtmlJs(overallSummary.key_takeaways.challenge || 'N/A')}</p>`;
-        takeawaysHtml += `<p><strong>策略機會:</strong> ${escapeHtmlJs(overallSummary.key_takeaways.opportunity || 'N/A')}</p>`;
+    // 4a. 渲染宏觀總結區
+    const overallSummary = reportData.overall_summary;
+    summaryTitle.textContent = `課堂總結 (${reportData.class_session_id})`;
+    summaryNarrative.textContent = overallSummary.class_narrative || "無敘事性總結。";
+    
+    let takeawaysHtml = '<h4>關鍵發現與建議</h4>';
+    if (overallSummary.key_findings && overallSummary.key_findings.length > 0) {
+        takeawaysHtml += '<h5>關鍵發現</h5><ul>';
+        overallSummary.key_findings.forEach(finding => {
+            takeawaysHtml += `<li>${escapeHtmlJs(finding)}</li>`;
+        });
+        takeawaysHtml += '</ul>';
+    }
+    if (overallSummary.teaching_suggestions && overallSummary.teaching_suggestions.length > 0) {
+        takeawaysHtml += '<h5>教學建議</h5><ul>';
+        overallSummary.teaching_suggestions.forEach(suggestion => {
+            takeawaysHtml += `<li>${escapeHtmlJs(suggestion)}</li>`;
+        });
+        takeawaysHtml += '</ul>';
     }
     summaryKeyTakeaways.innerHTML = takeawaysHtml;
 
-    // 2. 準備圖表數據並渲染圖表
+    // 4b. 渲染全新的專注度節奏圖
     const timelineData = reportData.timeline_analysis;
-    const labels = timelineData.map(d => d.interval_start);
-    
-    const datasets = {
-        '專注學習(書寫/閱讀)': [], '專注聽講': [], '分心': [], '中性/其他': []
-    };
+    if (chartCanvas && timelineData && timelineData.length > 0) {
+        chartContainer.style.display = 'block'; // 顯示圖表容器
+        renderFocusPercentageChart(chartCanvas, timelineData); // 調用新函數來渲染圖表
+    } else {
+        chartContainer.style.display = 'none'; // 如果沒有數據，則隱藏
+    }
 
-    timelineData.forEach(d => {
-        const percentages = d.student_state_summary;
-        datasets['專注學習(書寫/閱讀)'].push(percentages['專注學習(書寫/閱讀)'] || 0);
-        datasets['專注聽講'].push(percentages['專注聽講'] || 0);
-        datasets['分心'].push(percentages['分心'] || 0);
-        datasets['中性/其他'].push(percentages['中性/其他'] || 0);
-    });
-
-    renderBehaviorTrendChart(chartCanvas, labels, datasets);
-
-    // 3. 渲染逐段洞察卡片
+    // 4c. 渲染逐段洞察卡片
     timelineData.forEach(interval => {
         const card = document.createElement('div');
         card.className = 'timeline-card';
         
-        const insight = interval.ai_insight_and_recommendation;
+        const focusLevelClass = {
+            '高': 'focus-high',
+            '中': 'focus-medium',
+            '低': 'focus-low'
+        }[interval.student_focus_level] || 'focus-unknown';
 
+        // 處理 focus_trigger_analysis 欄位的 HTML 生成
+        let triggerHtml = '';
+        if (interval.focus_trigger_analysis) {
+            const posTrigger = interval.focus_trigger_analysis.positive_trigger;
+            const negTrigger = interval.focus_trigger_analysis.negative_trigger;
+
+            triggerHtml += '<div class="trigger-analysis-container">';
+            if (posTrigger && posTrigger.trigger_quote_or_event !== '無明顯觸發點') {
+                triggerHtml += `
+                    <div class="trigger-item positive-trigger">
+                        <span class="trigger-icon">🚀</span>
+                        <div>
+                            <p><strong>專注提升點:</strong> ${escapeHtmlJs(posTrigger.trigger_quote_or_event)}</p>
+                            <p><em>分析: ${escapeHtmlJs(posTrigger.analysis)}</em></p>
+                        </div>
+                    </div>
+                `;
+            }
+            if (negTrigger && negTrigger.trigger_quote_or_event !== '無明顯觸發點') {
+                triggerHtml += `
+                    <div class="trigger-item negative-trigger">
+                        <span class="trigger-icon">📉</span>
+                        <div>
+                            <p><strong>專注下降點:</strong> ${escapeHtmlJs(negTrigger.trigger_quote_or_event)}</p>
+                            <p><em>分析: ${escapeHtmlJs(negTrigger.analysis)}</em></p>
+                        </div>
+                    </div>
+                `;
+            }
+            triggerHtml += '</div>';
+        }
+
+        // 組合完整的卡片 HTML
         card.innerHTML = `
             <div class="card-header">
-                <h5>時間區段: ${escapeHtmlJs(interval.interval_start)} - ${escapeHtmlJs(interval.interval_end)}</h5>
-                <span class="activity-tag">${escapeHtmlJs(interval.teacher_activity_summary.state)}</span>
+                <h5>時間區段: ${escapeHtmlJs(interval.start_time)} - ${escapeHtmlJs(interval.end_time)}</h5>
+                <span class="focus-tag ${focusLevelClass}">${escapeHtmlJs(interval.student_focus_level)} (${interval.student_focus_percentage}%)</span>
             </div>
             <div class="card-body">
-                <p><strong>教學法洞察:</strong> ${escapeHtmlJs(insight.pedagogical_insight || 'N/A')}</p>
-                <p><strong>可行動建議:</strong> ${escapeHtmlJs(insight.actionable_recommendation || 'N/A')}</p>
+                <p><strong>活動主題:</strong> ${escapeHtmlJs(interval.event_title || 'N/A')}</p>
+                <p><strong>教學內容:</strong> ${escapeHtmlJs(interval.event_description || 'N/A')}</p>
+                <div class="behavior-summary">
+                    <p><strong>🟢 專注行為:</strong> ${escapeHtmlJs(interval.key_student_behaviors.positive || '無')}</p>
+                    <p><strong>🔴 分心行為:</strong> ${escapeHtmlJs(interval.key_student_behaviors.negative || '無')}</p>
+                </div>
+                ${triggerHtml}
+                <p class="ai-insight"><strong>AI 洞察:</strong> ${escapeHtmlJs(interval.ai_insight || 'N/A')}</p>
             </div>
         `;
         timelineCardsContainer.appendChild(card);
@@ -1698,36 +1904,326 @@ function renderBehaviorTrendChart(canvas, labels, datasets) {
     });
 }
 
-// teacher_dashboard.js 中新增此函數
 function populateBehaviorSelector() {
     const container = document.getElementById('behaviorSelector');
     if (!container) return;
 
-    // 遍歷我們定義好的分類物件
     for (const categoryName in BEHAVIOR_CATEGORIES_GROUPED) {
-        // 透過 data-category 屬性找到對應的容器
         const wrapper = container.querySelector(`.behavior-buttons-wrapper[data-category="${categoryName}"]`);
         if (!wrapper) continue;
-
-        wrapper.innerHTML = ''; // 清空舊按鈕
-
+        
+        wrapper.innerHTML = '';
         const behaviors = BEHAVIOR_CATEGORIES_GROUPED[categoryName];
+        
         behaviors.forEach(behaviorLabel => {
             const button = document.createElement('button');
-            button.type = 'button'; // 避免觸發表單提交
+            button.type = 'button';
             button.className = 'behavior-btn';
             button.textContent = behaviorLabel;
-            button.dataset.value = behaviorLabel; // 將行為名稱存儲在 data-* 屬性中
+            button.dataset.value = behaviorLabel;
 
-            // 為每個按鈕綁定點擊事件
+            // 【【【 全新 Toggle 互動邏輯 】】】
             button.onclick = function() {
-                // 1. 移除所有按鈕的 'active' class
-                container.querySelectorAll('.behavior-btn').forEach(btn => btn.classList.remove('active'));
-                // 2. 為當前點擊的按鈕添加 'active' class
-                this.classList.add('active');
-            };
+                // 檢查當前按鈕是否已經是 active 狀態
+                const isCurrentlyActive = this.classList.contains('active');
 
+                // 無論如何，都先移除這個分類下所有按鈕的 active 狀態
+                const buttonsInThisColumn = wrapper.querySelectorAll('.behavior-btn');
+                buttonsInThisColumn.forEach(btn => btn.classList.remove('active'));
+
+                // 如果剛才不是 active 狀態，那麼現在就把它設為 active
+                // (實現了「選擇」和「切換選擇」的功能)
+                if (!isCurrentlyActive) {
+                    this.classList.add('active');
+                }
+                // 如果剛才就是 active 狀態，上面那一步已經把它移除了，這裡什麼都不做
+                // (就實現了「取消選擇」的功能)
+            };
             wrapper.appendChild(button);
         });
     }
+}
+
+async function populateKnowledgeHub(reportDate) {
+    const hubContainer = document.getElementById('knowledgeHubContainer');
+    if (!hubContainer) {
+        console.error("Fatal Error: The container 'knowledgeHubContainer' was not found in the DOM.");
+        return;
+    }
+
+    const loadingMessage = document.createElement('div');
+    loadingMessage.className = 'text-center';
+    loadingMessage.style.padding = '20px';
+    loadingMessage.textContent = `正在為您加載 ${reportDate} 的課堂筆記...`;
+    
+    hubContainer.innerHTML = '';
+    hubContainer.appendChild(loadingMessage);
+
+    try {
+        const response = await fetch(`/api/student/get_note_report_for_date?date=${encodeURIComponent(reportDate)}`);
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => null); 
+            const errorMessage = errorData?.error || `獲取筆記失敗 (HTTP ${response.status})`;
+            throw new Error(errorMessage);
+        }
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
+        // --- 【【【 核心修改邏輯 】】】 ---
+        
+        // 1. 優先嘗試獲取精煉後的數據
+        const refinedData = data.knowledge_hub_refined?.refined_knowledge_hub;
+        
+        // 2. 檢查精煉數據是否有效
+        if (refinedData && Array.isArray(refinedData) && refinedData.length > 0) {
+            console.log("偵測到有效的 'knowledge_hub_refined'，將渲染精煉版筆記。");
+            renderKnowledgeHubForStudent(refinedData, hubContainer, reportDate);
+        } 
+        // 3. 如果精煉數據無效，則嘗試獲取初始數據
+        else if (data.knowledge_hub_initial && typeof data.knowledge_hub_initial === 'object' && Object.keys(data.knowledge_hub_initial).length > 0) {
+            console.log("未找到精煉數據，退回使用 'knowledge_hub_initial' 進行渲染。");
+            // 將初始數據轉換為渲染函數可以接受的陣列格式
+            const initialDataAsArray = Object.entries(data.knowledge_hub_initial).map(([topicName, topicData]) => {
+                // 將多個教學片段的內容合併
+                const combinedTranscript = topicData.teaching_segments
+                    .map(segment => segment.relevant_transcript)
+                    .join('\n\n---\n\n'); // 用分隔線合併不同時間段的內容
+                
+                // 收集所有不重複的圖片路徑
+                const imageUrls = [...new Set(topicData.teaching_segments
+                    .map(segment => segment.relevant_blackboard_image_path)
+                    .filter(path => path) // 過濾掉 null 或空字串的路徑
+                )];
+
+                // 組合摘要
+                const combinedSummary = topicData.teaching_segments
+                    .map(segment => segment.summary_of_segment)
+                    .join(' ');
+
+                return {
+                    main_topic: topicName,
+                    topic_summary: combinedSummary,
+                    refined_transcript_content: combinedTranscript,
+                    relevant_blackboard_images: imageUrls
+                };
+            });
+            // 使用轉換後的數據進行渲染
+            renderKnowledgeHubForStudent(initialDataAsArray, hubContainer, reportDate);
+        }
+        // 4. 如果兩種數據都沒有
+        else {
+            const messageToShow = data.message || '暫無此日期的課堂筆記可供查看。';
+            hubContainer.innerHTML = `<p class="text-center">${escapeHtml(messageToShow)}</p>`;
+        }
+        // --- 【【【 修改結束 】】】 ---
+
+    } catch (error) {
+        console.error(`獲取日期 ${reportDate} 的筆記時發生錯誤:`, error);
+        hubContainer.innerHTML = `<p class="error-message" style="color: red; text-align: center;">無法加載課堂筆記: ${escapeHtml(error.message)}</p>`;
+    }
+}
+
+/**
+ * 【v2.0 - 保持不變】
+ * 專門為學生報告頁面渲染知識庫的函數。
+ * 此函數的邏輯不需要修改，因為我們已經在 populateKnowledgeHub 中將
+ * `initial` 數據轉換成了它所期望的 `refined` 數據格式。
+ * @param {Array} hubData - 包含所有主題的陣列
+ * @param {HTMLElement} container - 要渲染內容的容器元素
+ * @param {string} reportDate - 當前報告的日期 (格式 YYYY-MM-DD)，用於構建圖片URL
+ */
+function renderKnowledgeHubForStudent(hubData, container, reportDate) {
+    container.innerHTML = ''; 
+
+    if (!reportDate) {
+        console.error("renderKnowledgeHubForStudent 錯誤: 未提供 reportDate，無法生成圖片路徑。");
+    }
+
+    hubData.forEach(topic => {
+        const topicItem = document.createElement('div');
+        topicItem.className = 'knowledge-topic-card';
+
+        const button = document.createElement('button');
+        button.className = 'accordion-button';
+        button.innerHTML = `<h3>${escapeHtml(topic.main_topic)}</h3>`;
+        
+        const panel = document.createElement('div');
+        panel.className = 'accordion-panel';
+
+        // 這裡的 escapeHtml 應改為 escapeHtmlJs
+        panel.innerHTML += `<div class="topic-section"><h4>AI 摘要</h4><p>${escapeHtmlJs(topic.topic_summary)}</p></div>`;
+        panel.innerHTML += `<div class="topic-section"><h4>完整教學筆記</h4><div class="transcript-content">${escapeHtmlJs(topic.refined_transcript_content).replace(/\n/g, '<br>')}</div></div>`;
+
+        if (topic.relevant_blackboard_images && topic.relevant_blackboard_images.length > 0) {
+            let imagesHTML = '<div class="topic-section"><h4>相關板書快照</h4><div class="image-gallery">';
+            topic.relevant_blackboard_images.forEach(imgPath => {
+                const imageName = imgPath.split('\\').pop().split('/').pop();
+                
+                const imageUrl = `/api/student/get_note_image/${encodeURIComponent(reportDate)}/${encodeURIComponent(imageName)}`;
+                
+                imagesHTML += `
+                    <div class="gallery-item">
+                        <img src="${imageUrl}" alt="${escapeHtmlJs(imageName)}" loading="lazy" class="zoomable-image">
+                        <p>${escapeHtmlJs(imageName)}</p>
+                    </div>`;
+            });
+            imagesHTML += '</div></div>';
+            panel.innerHTML += imagesHTML;
+        }
+
+        topicItem.appendChild(button);
+        topicItem.appendChild(panel);
+        container.appendChild(topicItem);
+        
+        button.addEventListener('click', function() {
+            logStudentActivity('click', `student_report_toggle_note_${topic.main_topic}`);
+            this.classList.toggle('active');
+            const panel = this.nextElementSibling;
+            if (panel.style.maxHeight) {
+                panel.style.maxHeight = null;
+            } else {
+                panel.style.maxHeight = panel.scrollHeight + "px";
+            }
+        });
+    });
+    
+    // 修正：在 renderKnowledgeHubForStudent 中應該使用 escapeHtmlJs
+    // 確保您的 js 檔案中有這個函數的定義
+    function escapeHtmlJs(unsafe) {
+        if (typeof unsafe !== 'string') {
+            return unsafe === null || typeof unsafe === 'undefined' ? '' : String(unsafe);
+        }
+        return unsafe
+             .replace(/&/g, "&amp;")
+             .replace(/</g, "&lt;")
+             .replace(/>/g, "&gt;")
+             .replace(/"/g, "&quot;")
+             .replace(/'/g, "&#039;");
+    }
+}
+
+function renderFocusPercentageChart(canvas, timelineData) {
+    if (focusChartInstance) {
+        focusChartInstance.destroy(); // 銷毀舊圖表以避免重疊
+    }
+
+    // 1. 從報告數據中提取圖表需要的標籤和數據
+    const labels = timelineData.map(d => `${d.start_time} - ${d.end_time}`);
+    const percentages = timelineData.map(d => d.student_focus_percentage);
+    const focusLevels = timelineData.map(d => d.student_focus_level);
+
+    // 2. 定義專注度等級對應的顏色
+    const levelColors = {
+        '高': 'rgba(75, 192, 192, 0.7)',  // 綠色
+        '中': 'rgba(255, 205, 86, 0.7)', // 黃色
+        '低': 'rgba(255, 99, 132, 0.7)'  // 紅色
+    };
+    const levelBorderColors = {
+        '高': 'rgba(75, 192, 192, 1)',
+        '中': 'rgba(255, 205, 86, 1)',
+        '低': 'rgba(255, 99, 132, 1)'
+    };
+
+    // 3. 【特別之處 1：漸層色彩】創建一個腳本化的背景色
+    const chartArea = canvas.getContext('2d');
+    const gradient = chartArea.createLinearGradient(0, 0, 0, 400);
+    // 根據數據點的專注度等級，在漸層中添加顏色停靠點
+    timelineData.forEach((data, index) => {
+        const color = levelColors[data.student_focus_level] || 'rgba(201, 203, 207, 0.7)'; // 預設灰色
+        gradient.addColorStop(index / (timelineData.length - 1 || 1), color);
+    });
+
+    const data = {
+        labels: labels,
+        datasets: [{
+            label: '學生專注度 (%)',
+            data: percentages,
+            fill: true, // 啟用區域填充
+            backgroundColor: gradient, // ★ 使用我們創建的漸層
+            borderColor: function(context) {
+                const index = context.dataIndex;
+                if (index === undefined || index >= focusLevels.length) return '#ccc';
+                return levelBorderColors[focusLevels[index]] || '#ccc';
+            },
+            pointBackgroundColor: function(context) {
+                 const index = context.dataIndex;
+                 if (index === undefined || index >= focusLevels.length) return '#ccc';
+                 return levelBorderColors[focusLevels[index]] || '#ccc';
+            },
+            tension: 0.4, // 讓線條更平滑
+            pointRadius: 5,
+            pointHoverRadius: 8
+        }]
+    };
+
+    // 4. 【特別之處 2：互動式提示】自訂 Tooltip 內容
+    const options = {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: {
+                beginAtZero: true,
+                max: 100,
+                title: {
+                    display: true,
+                    text: '專注度百分比 (%)'
+                }
+            },
+            x: {
+                title: {
+                    display: true,
+                    text: '課堂時間區段'
+                }
+            }
+        },
+        plugins: {
+            legend: {
+                display: false // 只有一條線，可以隱藏圖例
+            },
+            tooltip: {
+                // 啟用豐富的 tooltip 回調
+                callbacks: {
+                    title: function(tooltipItems) {
+                        const index = tooltipItems[0].dataIndex;
+                        const timeline = timelineData[index];
+                        return `時間: ${timeline.start_time} - ${timeline.end_time}`;
+                    },
+                    label: function(context) {
+                        const percentage = context.parsed.y;
+                        return `平均專注度: ${percentage}%`;
+                    },
+                    afterBody: function(tooltipItems) {
+                        const index = tooltipItems[0].dataIndex;
+                        const timeline = timelineData[index];
+                        let insightText = [`\n主題: ${timeline.event_title}`];
+                        
+                        const posTrigger = timeline.focus_trigger_analysis?.positive_trigger;
+                        const negTrigger = timeline.focus_trigger_analysis?.negative_trigger;
+
+                        if (posTrigger && posTrigger.trigger_quote_or_event !== '無明顯觸發點') {
+                            insightText.push(`\n🚀 專注提升點:`);
+                            insightText.push(`   "${posTrigger.trigger_quote_or_event}"`);
+                        }
+                        if (negTrigger && negTrigger.trigger_quote_or_event !== '無明顯觸發點') {
+                             insightText.push(`\n📉 專注下降點:`);
+                             insightText.push(`   "${negTrigger.trigger_quote_or_event}"`);
+                        }
+                        return insightText;
+                    }
+                }
+            }
+        }
+    };
+
+    // 5. 創建新的圖表實例
+    focusChartInstance = new Chart(canvas, {
+        type: 'line',
+        data: data,
+        options: options
+    });
 }

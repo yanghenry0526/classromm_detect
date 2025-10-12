@@ -726,17 +726,17 @@ async function populateKnowledgeHub(reportDate) {
 
 
 /**
- * 【新增】專門為學生報告頁面渲染知識庫的函數
+ * 【【【 修正後的版本 v2.0 】】】
+ * 專門為學生報告頁面渲染知識庫的函數
  * @param {Array} hubData - 包含所有主題的陣列
  * @param {HTMLElement} container - 要渲染內容的容器元素
  * @param {string} reportDate - 當前報告的日期 (格式 YYYY-MM-DD)，用於構建圖片URL
  */
-function renderKnowledgeHubForStudent(hubData, container, reportDate) { // 【修改點 1】新增 reportDate 參數
+function renderKnowledgeHubForStudent(hubData, container, reportDate) {
     container.innerHTML = ''; // 清空加載提示
 
     if (!reportDate) {
         console.error("renderKnowledgeHubForStudent 錯誤: 未提供 reportDate，無法生成圖片路徑。");
-        // 可以選擇顯示一個錯誤訊息
     }
 
     hubData.forEach(topic => {
@@ -750,23 +750,35 @@ function renderKnowledgeHubForStudent(hubData, container, reportDate) { // 【�
         const panel = document.createElement('div');
         panel.className = 'accordion-panel';
 
+        // 填充摘要和筆記內容 (這部分不變)
         panel.innerHTML += `<div class="topic-section"><h4>AI 摘要</h4><p>${escapeHtml(topic.topic_summary)}</p></div>`;
-        panel.innerHTML += `<div class="topic-section"><h4>完整教學筆記</h4><div class="transcript-content">${escapeHtml(topic.refined_transcript_content).replace(/\n/g, '<br>')}</div></div>`;
+        panel.innerHTML += `<div class="topic-section"><h4>完整教學筆記</h4><div class="transcript-content">${renderSimpleMarkdown(topic.refined_transcript_content)}</div></div>`;
 
+        // --- 處理圖片的邏輯 (這是主要修改點) ---
         if (topic.relevant_blackboard_images && topic.relevant_blackboard_images.length > 0) {
             let imagesHTML = '<div class="topic-section"><h4>相關板書快照</h4><div class="image-gallery">';
-            topic.relevant_blackboard_images.forEach(imgPath => {
-                const imageName = imgPath.split('\\').pop().split('/').pop();
+            
+            // 【修改點 A】將 forEach 的參數從 imgPath 改為 imageObject，使其語意更清晰
+            topic.relevant_blackboard_images.forEach(imageObject => {
                 
-                // 【修改點 2】構建新的、包含日期的圖片 URL
+                // 【修改點 B】從物件的 'path' 屬性中提取路徑字串
+                const fullPath = imageObject.path;
+                const description = imageObject.description || '無描述'; // 如果沒有描述，提供一個預設值
+
+                // 從完整路徑中提取檔案名稱 (這段邏輯不變)
+                const imageName = fullPath.split('\\').pop().split('/').pop();
+                
+                // 構建圖片的 API URL (這段邏輯不變)
                 const imageUrl = `/api/student/get_note_image/${encodeURIComponent(reportDate)}/${encodeURIComponent(imageName)}`;
                 
+                // 【修改點 C】在產生的 HTML 中，使用 description 作為圖片下方的說明文字
                 imagesHTML += `
                     <div class="gallery-item">
-                        <img src="${imageUrl}" alt="${escapeHtml(imageName)}" loading="lazy" class="zoomable-image">
-                        <p>${escapeHtml(imageName)}</p>
+                        <img src="${imageUrl}" alt="${escapeHtml(description)}" loading="lazy" class="zoomable-image">
+                        <p class="image-description">${escapeHtml(description)}</p>
                     </div>`;
             });
+
             imagesHTML += '</div></div>';
             panel.innerHTML += imagesHTML;
         }
@@ -775,7 +787,7 @@ function renderKnowledgeHubForStudent(hubData, container, reportDate) { // 【�
         topicItem.appendChild(panel);
         container.appendChild(topicItem);
         
-        // ... button click event listener ...
+        // 按鈕點擊事件 (這部分不變)
         button.addEventListener('click', function() {
             logStudentActivity('click', `student_report_toggle_note_${topic.main_topic}`);
             this.classList.toggle('active');
@@ -861,20 +873,23 @@ async function populateWorkbook(reportDate) {
 }
 
 /**
- * 【修正版】
+ * 【【【 最終修正版 v4.0 - 完整且正確 】】】
  * 渲染函數：將練習冊數據渲染為互動式任務卡片
  * @param {Array} workbookData - 包含所有主題和測驗的陣列
  * @param {HTMLElement} container - 要渲染內容的容器元素
  * @param {string} reportDate - 當前報告的日期 (格式 YYYY-MM-DD)，用於構建圖片URL
  */
 function renderWorkbook(workbookData, container, reportDate) {
-    container.innerHTML = ''; // 清空加載提示
+    // 步驟 1: 清空容器並設置全局數據
+    container.innerHTML = ''; 
     window.g_workbookData = workbookData;
 
+    // 步驟 2: 檢查 reportDate 是否有效
     if (!reportDate) {
-        console.error("renderWorkbook 警告: 未提供 reportDate，練習冊中的圖片可能無法加載。");
+        console.error("renderWorkbook 錯誤: 未提供 reportDate，練習冊中的圖片可能無法加載。");
     }
 
+    // 步驟 3: 遍歷每個主題，生成對應的任務卡片
     workbookData.forEach((topic, topicIndex) => {
         // --- 創建手風琴的基礎結構 ---
         const missionCard = document.createElement('div');
@@ -892,21 +907,40 @@ function renderWorkbook(workbookData, container, reportDate) {
         reviewSection.className = 'review-section';
 
         let reviewHTML = `<h4>Part 1: 快速複習</h4>`;
-        reviewHTML += `<div class="topic-section"><h5>AI 摘要</h5><p>${escapeHtml(topic.topic_summary)}</p></div>`;
-        reviewHTML += `<div class="topic-section"><h5>完整教學筆記</h5><div class="transcript-content">${escapeHtml(topic.refined_transcript_content).replace(/\n/g, '<br>')}</div></div>`;
+
+        // reviewHTML += `<div class="topic-section"><h5>AI 摘要</h5><p>${escapeHtml(topic.topic_summary)}</p></div>`;
+        reviewHTML += `<div class="topic-section"><div class="transcript-content">${renderSimpleMarkdown(topic.refined_transcript_content)}</div></div>`;
         
-        if (topic.relevant_blackboard_images && topic.relevant_blackboard_images.length > 0) {
+        // 【【【 這裡是核心修正點 】】】
+        if (topic.relevant_blackboard_images && Array.isArray(topic.relevant_blackboard_images) && topic.relevant_blackboard_images.length > 0) {
             reviewHTML += '<div class="topic-section"><h5>相關板書畫面</h5><div class="image-gallery">';
-            topic.relevant_blackboard_images.forEach(imgPath => {
-                const imageName = imgPath.split('\\').pop().split('/').pop();
-                const imageUrl = reportDate ? `/api/student/get_note_image/${encodeURIComponent(reportDate)}/${encodeURIComponent(imageName)}` : '';
-                reviewHTML += `<div class="gallery-item"><img src="${imageUrl}" alt="${escapeHtml(imageName)}" loading="lazy" class="zoomable-image"></div>`;
+            
+            // 修正 #1: 遍歷的是 imageObject，而不是 imgPath
+            topic.relevant_blackboard_images.forEach(imageObject => { 
+                // 修正 #2: 增加健壯性檢查，確保 imageObject 和其 path 屬性都存在且為字串
+                if (imageObject && typeof imageObject.path === 'string') {
+                    const fullPath = imageObject.path;
+                    const description = imageObject.description || '板書快照'; // 提供一個預設描述
+
+                    const imageName = fullPath.split('\\').pop().split('/').pop();
+                    const imageUrl = reportDate ? `/api/student/get_note_image/${encodeURIComponent(reportDate)}/${encodeURIComponent(imageName)}` : '';
+                    
+                    // 修正 #3: 使用 description 作為 alt 文字，並與 knowledge hub 的顯示方式統一
+                    // 這裡也為圖片加上了描述文字 <p>
+                    reviewHTML += `
+                        <div class="gallery-item">
+                            <img src="${imageUrl}" 
+                                 data-full-src="${imageUrl}"
+                                 alt="${escapeHtml(description)}" 
+                                 loading="lazy" 
+                                 class="zoomable-image">
+                            <p class="image-description">${escapeHtml(description)}</p>
+                        </div>`;
+                }
             });
             reviewHTML += '</div></div>';
         }
         reviewSection.innerHTML = reviewHTML;
-        
-        // 【正確的追加方式 1】將複習部分添加到 panel
         panel.appendChild(reviewSection);
 
         // --- Part 2: 開始挑戰 (渲染表單) ---
@@ -927,16 +961,30 @@ function renderWorkbook(workbookData, container, reportDate) {
                 const questionDiv = document.createElement('div');
                 questionDiv.className = 'quiz-item';
                 
+                // 題目文字的生成邏輯不變
                 let questionHTML = `<p><strong>Q${quizIndex + 1}:</strong> ${escapeHtml(quizItem.question)}</p>`;
 
+                // 處理選擇題的邏輯不變
                 if (quizItem.type === 'multiple_choice' && quizItem.options) {
                     quizItem.options.forEach(option => {
                         questionHTML += `<label class="quiz-option"><input type="radio" name="quiz-${topicIndex}-${quizIndex}" value="${escapeHtml(option)}"> ${escapeHtml(option)}</label>`;
                     });
-                } else if (quizItem.type === 'fill_in_the_blank') {
+                } 
+                // 【核心修改點】處理填充題的邏輯
+                else if (quizItem.type === 'fill_in_the_blank') {
+                    
+                    // 【新增步驟 1】檢查 JSON 資料中是否有 'hint' 欄位
+                    if (quizItem.hint) {
+                        // 如果有，就在 questionHTML 後面追加一個帶有提示的 HTML 元素
+                        // 我們使用 <small> 標籤讓提示文字稍微小一點，並給它一個 class 以便美化
+                        questionHTML += `<p class="quiz-hint-wrapper">提示: <span class="quiz-hint">(${escapeHtml(quizItem.hint)})</span></p>`;
+                    }
+
+                    // 【步驟 2】渲染輸入框 (這行程式碼本身沒有變，只是位置在提示之後)
                     questionHTML += `<input type="text" class="quiz-input" name="quiz-${topicIndex}-${quizIndex}" placeholder="請在此輸入答案">`;
                 }
                 
+                // 渲染回饋區的邏輯不變
                 questionHTML += `<div class="feedback-area" id="feedback-${topicIndex}-${quizIndex}"></div>`;
                 questionDiv.innerHTML = questionHTML;
                 form.appendChild(questionDiv);
@@ -950,8 +998,6 @@ function renderWorkbook(workbookData, container, reportDate) {
         form.appendChild(submitButton);
 
         challengeSection.appendChild(form);
-        
-        // 【正確的追加方式 2】將挑戰部分添加到 panel
         panel.appendChild(challengeSection);
         
         // --- 組合最終的卡片 ---
@@ -973,37 +1019,113 @@ function renderWorkbook(workbookData, container, reportDate) {
     });
 }
 
-/**
- * 【新增】核對答案並顯示即時回饋
- * @param {number} topicIndex - 正在作答的主題索引
- */
 function checkAnswers(topicIndex) {
-    // 從全局變數中獲取我們之前保存的數據
+    if (typeof window.g_workbookData === 'undefined' || !window.g_workbookData[topicIndex]) {
+        console.error(`錯誤：無法在全域資料中找到索引為 ${topicIndex} 的主題資料。`);
+        return;
+    }
     const topicData = window.g_workbookData[topicIndex];
-    if (!topicData) return;
+    const form = document.getElementById(`quiz-form-${topicIndex}`);
+    if (!form) {
+        console.error(`錯誤：找不到 ID 為 quiz-form-${topicIndex} 的表單元素。`);
+        return;
+    }
+    
+    const submitButton = form.querySelector('.submit-quiz-button');
+    const panel = form.closest('.accordion-panel');
+
+    if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = '正在核對...';
+    }
+
+    // 【【【 新增步驟 A: 準備一個空列表來收集答題紀錄 】】】
+    const attemptsToLog = [];
 
     topicData.interactive_quiz.forEach((quizItem, quizIndex) => {
         const feedbackDiv = document.getElementById(`feedback-${topicIndex}-${quizIndex}`);
-        const formElements = document.getElementById(`quiz-form-${topicIndex}`).elements;
-        const inputGroup = formElements[`quiz-${topicIndex}-${quizIndex}`];
-        
-        let userAnswer = '';
+        if (!feedbackDiv) return;
+
+        let isCorrect = false;
+        let userAnswer = ''; // 初始化學生答案為空字串
+
         if (quizItem.type === 'multiple_choice') {
-            userAnswer = inputGroup.value; // 對於 radio group，.value 直接獲取選中的值
+            const selectedRadio = form.querySelector(`input[name="quiz-${topicIndex}-${quizIndex}"]:checked`);
+            if (selectedRadio) {
+                userAnswer = selectedRadio.value.trim(); // 儲存完整的選項文字
+                const userAnswerLetter = userAnswer.charAt(0).toUpperCase();
+                isCorrect = (userAnswerLetter === quizItem.answer.toUpperCase());
+            } else {
+                userAnswer = "未作答"; // 如果沒有選擇
+            }
         } else if (quizItem.type === 'fill_in_the_blank') {
-            userAnswer = inputGroup.value.trim();
+            const inputElement = form.elements[`quiz-${topicIndex}-${quizIndex}`];
+            if (inputElement) {
+                userAnswer = inputElement.value.trim();
+                if (userAnswer === "") {
+                    userAnswer = "未作答";
+                    isCorrect = false;
+                } else {
+                    isCorrect = (userAnswer.toLowerCase() === quizItem.answer.toLowerCase());
+                }
+            }
         }
 
-        // 比較答案 (忽略大小寫差異)
-        if (userAnswer && userAnswer.toLowerCase() === quizItem.answer.toLowerCase()) {
+        if (isCorrect) {
             feedbackDiv.innerHTML = `<p class="correct">✔️ 正確！</p>`;
         } else {
-            feedbackDiv.innerHTML = `<p class="incorrect">❌ 錯誤。正確答案是: <strong>${escapeHtml(quizItem.answer)}</strong></p>`;
+            const correctAnswerDisplay = (quizItem.type === 'multiple_choice') 
+                ? escapeHtml(quizItem.answer.charAt(0).toUpperCase())
+                : escapeHtml(quizItem.answer);
+            feedbackDiv.innerHTML = `<p class="incorrect">❌ 錯誤。正確答案是: <strong>${correctAnswerDisplay}</strong></p>`;
         }
         
-        // 無論對錯，都顯示答案解析
-        feedbackDiv.innerHTML += `<p class="explanation"><strong>解析：</strong>${escapeHtml(quizItem.explanation)}</p>`;
+        if (quizItem.explanation) {
+            feedbackDiv.innerHTML += `<p class="explanation"><strong>解析：</strong>${escapeHtml(quizItem.explanation)}</p>`;
+        }
+
+        // 【【【 新增步驟 B: 將這題的作答結果打包成一個物件，並加入列表中 】】】
+        attemptsToLog.push({
+            topic_name: topicData.main_topic,
+            question_text: quizItem.question,
+            question_type: quizItem.type,
+            user_answer: userAnswer,
+            correct_answer: quizItem.answer,
+            is_correct: isCorrect
+        });
     });
+
+    // 【【【 新增步驟 C: 使用 fetch 將整個列表發送到後端 API 】】】
+    if (attemptsToLog.length > 0) {
+        fetch('/api/log_quiz_attempt', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(attemptsToLog)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log("答題紀錄已成功發送到後端。");
+            } else {
+                console.error("發送答題紀錄失敗:", data.message);
+            }
+        })
+        .catch(error => {
+            console.error('發送答題紀錄時發生網路錯誤:', error);
+        });
+    }
+
+    setTimeout(() => {
+        if (panel && panel.style.maxHeight && panel.style.maxHeight !== '0px') {
+            panel.style.maxHeight = panel.scrollHeight + "px";
+        }
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.textContent = '重新提交';
+        }
+    }, 150);
 }
 
 function setupImageModal() {
@@ -1018,12 +1140,15 @@ function setupImageModal() {
     }
 
     // --- 核心邏輯：使用事件委派 (Event Delegation) ---
-    // 因為圖片是動態生成的，我們將點擊事件綁定到 document 上，然後檢查點擊的目標是否是我們想要的圖片。
     document.addEventListener('click', function(event) {
-        // 檢查點擊的元素是否帶有 'zoomable-image' 這個 class
-        if (event.target.classList.contains('zoomable-image')) {
-            const clickedImage = event.target;
+        // 【關鍵修改】
+        // 使用 .closest() 來查找被點擊的元素或其父元素中，是否包含 .zoomable-image
+        // 這比 event.target 更可靠，因為用戶可能點到圖片的邊框或容器
+        const clickedImage = event.target.closest('.zoomable-image');
 
+        // 只有當 clickedImage 存在 (即點擊發生在可縮放圖片上或其內部) 時，才執行後續操作
+        if (clickedImage) {
+            
             // 記錄點擊事件
             logStudentActivity('click', `zoom_image_${clickedImage.alt}`);
 
@@ -1034,16 +1159,11 @@ function setupImageModal() {
         }
     });
 
-    // --- 關閉 Modal 的邏輯 ---
-
-    // 1. 點擊關閉按鈕 (X)
+    // --- 關閉 Modal 的邏輯 (這部分不變) ---
     closeBtn.onclick = function() { 
         modal.style.display = "none";
     }
-
-    // 2. 點擊 Modal 背景（遮罩層）時關閉
     modal.onclick = function(event) {
-        // 確保點擊的是背景，而不是圖片本身
         if (event.target === modal) {
             modal.style.display = "none";
         }
@@ -1074,3 +1194,64 @@ window.addEventListener('beforeunload', function (e) {
         }
     }
 }); 
+
+function renderSimpleMarkdown(markdownText) {
+    if (typeof markdownText !== 'string') {
+        return '';
+    }
+
+    // 內建一個安全的 HTML 轉義函數
+    function escapeContent(unsafe) {
+        if (typeof unsafe !== 'string') return '';
+        return unsafe
+             .replace(/&/g, "&amp;")
+             .replace(/</g, "&lt;")
+             .replace(/>/g, "&gt;")
+             .replace(/"/g, "&quot;")
+             .replace(/'/g, "&#039;");
+    }
+
+    const lines = markdownText.replace(/\\n/g, '\n').split('\n');
+    let htmlOutput = '';
+    let inList = false;
+
+    lines.forEach(line => {
+        const trimmedLine = line.trim();
+
+        if (!trimmedLine.startsWith('-') && inList) {
+            htmlOutput += '</ul>';
+            inList = false;
+        }
+
+        if (trimmedLine.startsWith('## ')) {
+            htmlOutput += `<h3>${escapeContent(trimmedLine.substring(3))}</h3>`;
+        } else if (trimmedLine.startsWith('**') && trimmedLine.endsWith('**')) {
+            const content = trimmedLine.substring(2, trimmedLine.length - 2);
+            htmlOutput += `<h4><strong>${escapeContent(content)}</strong></h4>`;
+        } else if (trimmedLine.startsWith('- ')) {
+            if (!inList) {
+                htmlOutput += '<ul>';
+                inList = true;
+            }
+            // 處理條列項目中的粗體 **重點**
+            const listItemContent = escapeContent(trimmedLine.substring(2))
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            htmlOutput += `<li>${listItemContent}</li>`;
+        } else if (trimmedLine === '') {
+            if (!inList) { // 只有在列表外才加換行
+                htmlOutput += '<br>';
+            }
+        } else {
+            // 處理一般段落中的粗體 **重點**
+            const paragraphContent = escapeContent(trimmedLine)
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            htmlOutput += `<p>${paragraphContent}</p>`;
+        }
+    });
+
+    if (inList) {
+        htmlOutput += '</ul>';
+    }
+
+    return htmlOutput;
+}

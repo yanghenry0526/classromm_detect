@@ -517,40 +517,51 @@ ul.flashes li.warning {
 
 /* Modal (彈出視窗) 的樣式 */
 .modal {
-    display: none;
+    display: none; 
     position: fixed;
     z-index: 1000;
     left: 0;
     top: 0;
     width: 100%;
     height: 100%;
-    overflow-y: auto; /* 只允許垂直滾動 */
-    background-color: rgba(10, 25, 41, 0.85); /* 深藍色調的深色背景 */
-    -webkit-backdrop-filter: blur(8px); /* 背景模糊效果 */
+    background-color: rgba(10, 25, 41, 0.85);
+    -webkit-backdrop-filter: blur(8px);
     backdrop-filter: blur(8px);
-    padding: 30px; /* 四周留出邊距 */
+    /* 【新增】下面三行是關鍵，使用 Flexbox 來完美居中 */
+    /* display: flex; */
+    align-items: center; /* 垂直居中 */
+    justify-content: center; /* 水平居中 */
+    padding: 20px; /* 稍微減少一些 padding */
+    overflow: hidden; /* 【修改】禁用滾動，因為我們用 flex 居中了 */
 }
 
 /* Modal 內容容器 (透明，僅用於佈局) */
 .modal-content {
     position: relative;
-    margin: auto;
-    padding: 0;
-    background: transparent; /* 移除背景 */
-    border: none;
-    width: 100%;
-    max-width: 1400px;
-    box-shadow: none; /* 移除陰影 */
+    width: 90%; /* 佔螢幕寬度的90% */
+    height: 85vh; /* 高度最多為視窗高度的85% */
+    max-width: 1400px; /* 最大寬度限制 */
+    background-color: #2c3e50; /* 給容器一個深色背景 */
+    border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    overflow: hidden; /* 隱藏超出部分的內容，確保圓角效果 */
+
+    /* 【【【核心】】】 使用 Grid 佈局 */
+    display: grid;
+    grid-template-columns: 2fr 1fr; /* 左側(圖片)佔2份，右側(文字)佔1份 */
+    grid-template-rows: 1fr; /* 只有一行 */
+    gap: 0; /* 欄位之間沒有間隙 */
 }
 
 /* Modal 中放大的圖片 */
-#modalImage { /* 【新增】專門為大圖設置樣式 */
-    width: auto; /* 寬度自動 */
-    height: auto; /* 高度自動 */
-    max-width: 100%; /* 最大寬度不超過父容器 */
-    max-height: 80vh; /* 【關鍵】最大高度為視窗高度的80%，避免圖片太大超出螢幕 */
-    border-radius: 5px;
-    box-shadow: 0 0 20px rgba(0,0,0,0.5); /* 給圖片加點陰影 */
+#modalImage {
+    width: 100%;  /* 填滿其所在的 grid 欄位寬度 */
+    height: 100%; /* 填滿其所在的 grid 欄位高度 */
+    object-fit: contain; /* 【關鍵】確保圖片完整顯示，不被裁切，多餘空間留白 */
+    background-color: #000; /* 給圖片後方一個純黑背景，視覺效果更好 */
+    padding: 10px; /* 圖片周圍留一點點白邊 */
+    border-radius: 0; /* 圖片本身不需要圓角，由父容器控制 */
+    box-shadow: none; /* 也不需要陰影 */
 }
 
 /* 關閉按鈕 (X) */
@@ -574,11 +585,15 @@ ul.flashes li.warning {
 }
 
 /* 圖片標題 (檔名) */
-#modalCaption { /* 【新增】為標題設置樣式 */
-    margin: 15px auto 0;
-    color: #ccc;
+#modalCaption {
+    color: #ecf0f1; /* 淺色文字，對比深色背景 */
+    padding: 30px; /* 增加大量內邊距，讓文字更易讀 */
     font-size: 1.1em;
-    padding-bottom: 150px; /* 【新增】給底部留足夠空間，避免標題被截斷 */
+    line-height: 1.7; /* 增加行高 */
+    overflow-y: auto; /* 如果文字太長，允許這個區域內部滾動 */
+    background-color: rgba(255, 255, 255, 0.05); /* 微妙的背景提亮 */
+    margin: 0; /* 移除所有外邊距 */
+    padding-bottom: 30px; /* 確保底部有足夠空間 */
 }
 
 .close-button:hover,
@@ -827,8 +842,12 @@ ul.flashes li.warning {
     padding: 0 25px; /* 左右內邊距與按鈕對齊 */
     background-color: white;
     max-height: 0;
+    
+    /* 【關鍵修改】 確保 overflow 是 hidden，這是動畫的基礎 */
     overflow: hidden;
-    transition: max-height 0.4s ease-out, padding 0.4s ease-out; /* 動畫更平滑 */
+    
+    /* 【關鍵修改】 將 transition 的目標從 max-height 擴展到 all，這樣 padding 的變化也會有動畫效果 */
+    transition: all 0.4s ease-out; 
 }
 
 /* 面板展開時的樣式 */
@@ -1059,6 +1078,12 @@ ul.flashes li.warning {
 
 .quiz-item:last-of-type {
     margin-bottom: 0;
+}
+
+.quiz-hint {
+    color: #888; /* 灰色文字 */
+    font-style: italic; /* 斜體 */
+    margin-left: 8px; /* 和問題稍微隔開 */
 }
 
 /* 選擇題的選項樣式 (與您原版相似) */
@@ -1584,7 +1609,7 @@ ul.flashes li.warning {
 }
 
 
-/* --- 校準工作台 (Annotation Workbench) 樣式 --- */
+/* --- 校準工作台 (Annotation Workbench) 樣式 --- */ 
 
 .annotation-workbench-layout {
     display: flex;
@@ -1688,11 +1713,11 @@ ul.flashes li.warning {
     overflow: hidden; /* 確保覆蓋層的圓角不會超出邊界 */
 }
 
-#annotationImage {
+/* #annotationImage {
     max-width: 100%;
-    max-height: 500px; /* 限制圖片最大高度 */
+    max-height: 500px; 
     object-fit: contain;
-}
+} */
 
 .annotation-form {
     background-color: #f8f9fa;
@@ -2122,6 +2147,18 @@ option:hover {
     text-align: right; /* 靠右對齊 */
 }
 
+#annotationStudentList li.active {
+    color: #FFFFFF; /* 將主要文字顏色 (如 "ID: 2 (78 張)") 設為白色 */
+}
+
+/*
+  同時，我們需要一個更具體的規則來覆蓋 .progress-text 原本的灰色設定。
+  這個選擇器會精準地找到 active 的 li 元素內部的 .progress-text。
+*/
+#annotationStudentList li.active .progress-text {
+    color: #FFFFFF; /* 將進度文字 (如 "1 / 78") 也設為白色 */
+}
+
 /* ========================================================================= */
 /* ★★★ 狀態篩選器按鈕樣式 (新增) ★★★ */
 /* ========================================================================= */
@@ -2226,4 +2263,384 @@ option:hover {
     color: #fff;
     border-color: #0056b3;
     font-weight: bold;
+}
+
+/* --- 全新的序列標註介面樣式 --- */
+
+.sequence-navigation-container {
+    display: grid; /* 【核心修改】改用 Grid 佈局 */
+    grid-template-columns: auto 1fr auto; /* 上一頁按鈕 | 主區域 | 下一頁按鈕 */
+    align-items: stretch;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.sequence-nav-btn {
+    padding: 20px 10px;
+    border: 1px solid #ccc;
+    background-color: #f0f0f0;
+    cursor: pointer;
+    border-radius: 5px;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sequence-nav-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.sequence-display-area {
+    display: grid; /* 【核心修改】內部也使用 Grid 佈局 */
+    grid-template-columns: 1fr auto; /* 主圖區域 | 縮圖區域 */
+    gap: 15px;
+    border: 1px solid #ddd;
+    padding: 10px;
+    border-radius: 5px;
+    min-height: 350px;
+    min-width: 0; /* 防止溢出 */
+}
+
+.main-image-container {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #f0f0f0;
+    border-radius: 4px;
+    min-width: 0; /* 允許主圖容器被壓縮 */
+}
+
+#annotationImage {
+    width: 100%;        /* 【新增】設定寬度為 100% */
+    height: 100%;       /* 【新增】設定高度為 100% */
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: cover;  /* 【修改】將 contain 改為 cover */
+    border-radius: 4px; /* 【新增】讓圖片本身也帶有圓角，與容器一致 */
+}
+
+.image-filename-label {
+    position: absolute;
+    bottom: 5px;
+    left: 5px;
+    background-color: rgba(0, 0, 0, 0.5);
+    color: white;
+    padding: 2px 5px;
+    font-size: 12px;
+    border-radius: 3px;
+}
+
+.thumbnail-container {
+    width: 150px; /* 【核心修改】直接給予一個固定的寬度 */
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto;
+    padding-right: 5px;
+}
+
+.thumbnail-wrapper {
+    position: relative;
+    border: 5px solid transparent;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.thumbnail-wrapper.active {
+    border-color: #dc3545;
+}
+
+.thumbnail-wrapper img {
+    width: 100%;
+    display: block;
+    border-radius: 2px;
+}
+
+.thumbnail-wrapper .status-icon {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    color: #28a745;
+    font-size: 16px;
+    font-weight: bold;
+    text-shadow: 0 0 3px white;
+}
+
+.context-and-tools-container {
+    display: flex;
+    gap: 20px;
+}
+
+.context-visualizer-group {
+    flex: 1;
+    min-width: 300px;
+}
+
+.tools-group {
+    flex: 3;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 調整行為按鈕面板以適應新佈局 */
+.behavior-selector-container {
+    padding: 8px;
+}
+.behavior-btn {
+    padding: 6px 8px;
+    font-size: 13px;
+}
+
+/* --- 【【【 全新的響應式設計 Media Query 】】】 --- */
+/* 當螢幕寬度小於或等於 1200px 時，應用以下樣式 */
+@media (max-width: 1200px) {
+
+    /* 1. 讓整個工作台從左右佈局變成上下佈局 */
+    .annotation-workbench-layout {
+        display: flex;
+        flex-direction: column; /* 學生列表在上，標註區在下 */
+        gap: 20px;
+    }
+
+    .student-list-container {
+        max-height: 250px; /* 在上方時，給一個最大高度，超出可滾動 */
+        overflow-y: auto;
+    }
+
+    /* 2. 讓主圖和縮圖也變成上下佈局 */
+    .sequence-display-area {
+        display: flex;
+        flex-direction: column; /* 主圖在上，縮圖在下 */
+    }
+
+    .main-image-container {
+        min-height: 300px; /* 給主圖一個最小高度 */
+    }
+    
+    .thumbnail-container {
+        width: 100%; /* 縮圖容器寬度變為100% */
+        flex-direction: row; /* 讓縮圖水平排列 */
+        flex-wrap: wrap; /* 允許縮圖換行 */
+        overflow-y: hidden; /* 隱藏垂直滾動條 */
+        padding-right: 0;
+        max-height: none; /* 取消最大高度限制 */
+    }
+
+    .thumbnail-wrapper {
+        flex: 1 0 120px; /* 讓縮圖有彈性，基礎寬度120px */
+        max-width: 150px; /* 但最大寬度不超過150px */
+    }
+
+    /* 3. 讓下方的「情境圖」和「工具列」也變成上下佈局 */
+    .context-and-tools-container {
+        flex-direction: column; /* 情境圖在上，工具列在下 */
+        align-items: center; /* 居中對齊 */
+    }
+
+    .context-visualizer-group {
+        width: 100%;
+        max-width: 500px; /* 給情境圖一個最大寬度，避免在寬屏下過大 */
+    }
+
+    .tools-group {
+        width: 100%;
+    }
+
+    /* 4. 讓「行為按鈕面板」的欄位可以自動換行 */
+    .behavior-selector-container {
+        flex-wrap: wrap; /* 關鍵：允許欄位換行 */
+        justify-content: center; /* 讓換行後的欄位居中 */
+    }
+
+    .behavior-category-column {
+        flex-basis: 150px; /* 給每個分類一個基礎寬度 */
+        flex-grow: 1;      /* 允許它們填滿剩餘空間 */
+    }
+}
+
+/* 響應式設計：針對小螢幕 (寬度 <= 800px) */
+@media (max-width: 800px) {
+    .modal-content {
+        /* 變回垂直堆疊 */
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr;
+        width: 95%;
+        height: 90vh;
+    }
+
+    #modalImage {
+        height: auto;
+        max-height: 60vh; /* 限制圖片最大高度 */
+    }
+
+    #modalCaption {
+        font-size: 1em;
+        padding: 20px;
+    }
+}
+
+/* --- 課堂綜合洞察頁籤樣式 --- */
+
+.summary-card {
+    background-color: #f9f9f9;
+    border-left: 5px solid #007bff;
+    padding: 20px;
+    margin-bottom: 30px;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.summary-card h4 {
+    margin-top: 0;
+    color: #333;
+}
+
+#summaryKeyTakeaways h5 {
+    color: #0056b3;
+    margin-top: 15px;
+    margin-bottom: 5px;
+}
+
+#summaryKeyTakeaways ul {
+    padding-left: 20px;
+    margin-top: 5px;
+}
+
+.timeline-analysis-container {
+    margin-top: 30px;
+}
+
+.timeline-card {
+    background-color: #ffffff;
+    border: 1px solid #e1e4e8;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    transition: box-shadow 0.2s ease-in-out;
+}
+
+.timeline-card:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.timeline-card .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #f6f8fa;
+    padding: 12px 20px;
+    border-bottom: 1px solid #e1e4e8;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+
+.timeline-card .card-header h5 {
+    margin: 0;
+    font-size: 1.1em;
+    color: #24292e;
+}
+
+.timeline-card .card-body {
+    padding: 20px;
+}
+
+.timeline-card .card-body p {
+    margin: 0 0 12px 0;
+    line-height: 1.6;
+}
+
+.timeline-card .card-body strong {
+    color: #333;
+}
+
+.behavior-summary {
+    background-color: #f9f9f9;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 12px;
+    border: 1px solid #eee;
+}
+
+.ai-insight {
+    font-style: italic;
+    color: #586069;
+    background-color: #f1f8ff;
+    padding: 10px;
+    border-left: 3px solid #0366d6;
+    border-radius: 4px;
+}
+
+.focus-tag {
+    padding: 4px 10px;
+    border-radius: 15px;
+    font-size: 0.9em;
+    font-weight: bold;
+    color: white;
+}
+
+.focus-tag.focus-high { background-color: #28a745; }
+.focus-tag.focus-medium { background-color: #ffc107; color: #333; }
+.focus-tag.focus-low { background-color: #dc3545; }
+.focus-tag.focus-unknown { background-color: #6c757d; }
+
+/* --- 關鍵話語分析區塊樣式 (新增) --- */
+.trigger-analysis-container {
+    margin: 15px 0;
+    padding: 0;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+}
+
+.trigger-item {
+    display: flex;
+    align-items: flex-start;
+    padding: 12px;
+}
+
+.trigger-item:not(:last-child) {
+    border-bottom: 1px solid #eee;
+}
+
+.trigger-item .trigger-icon {
+    font-size: 1.5em;
+    margin-right: 12px;
+    margin-top: 2px;
+}
+
+.trigger-item p {
+    margin: 0 0 5px 0;
+    line-height: 1.5;
+}
+
+.trigger-item p strong {
+    font-weight: 600;
+}
+
+.trigger-item.positive-trigger {
+    background-color: #e6ffed; /* 淡綠色背景 */
+}
+.trigger-item.positive-trigger p strong {
+    color: #22863a;
+}
+
+.trigger-item.negative-trigger {
+    background-color: #ffeef0; /* 淡紅色背景 */
+}
+.trigger-item.negative-trigger p strong {
+    color: #cb2431;
+}
+
+.trigger-item p em {
+    color: #586069;
+    font-size: 0.9em;
+}
+
+.chart-wrapper {
+    position: relative;
+    height: 400px; /* 或者您覺得合適的高度 */
+    width: 100%;
 }

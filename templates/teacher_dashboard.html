@@ -136,25 +136,22 @@
 
 <div id="annotationWorkbenchTab" class="tab-content" style="display: none;">
     <h3>校準工作台</h3>
-    <p>在此模式下，系統會智慧抽樣出需要您複核的影像。請依據您的專業判斷，直接對影像進行標註。</p>
+    <p>點擊左側學生開始標註。在右側，點擊縮圖可切換主預覽圖進行標註，完成一個序列後點擊「下一序列」。</p>
     
     <div id="annotationWorkbenchLayout" class="annotation-workbench-layout">
-        <!-- 左側：學生列表 -->
+        <!-- 左側：學生列表 (結構不變) -->
         <div class="student-list-container">
             <h4>學生列表</h4>
-            <ul id="annotationStudentList" class="student-list">
-                <!-- 學生列表將由 JS 動態生成 -->
-            </ul>
+            <ul id="annotationStudentList" class="student-list"></ul>
         </div>
 
-        <!-- 右側：標註介面 -->
+        <!-- 右側：全新的序列標註介面 -->
         <div class="annotation-area">
             <div id="annotationInterface" style="display: none;">
                 <div class="annotation-header">
                     <h4 id="annotationStudentName"></h4>
                     <div class="navigation-controls">
                         <span id="annotationProgress" class="progress-indicator"></span>
-                        <!-- 狀態篩選器按鈕組 -->
                         <div id="annotationFilter" class="filter-group">
                             <button class="filter-btn active" data-filter="all">全部</button>
                             <button class="filter-btn" data-filter="untagged">僅未標註</button>
@@ -163,138 +160,93 @@
                     </div>
                 </div>
 
-                <div class="image-navigation-container">
-                    <button id="prevImageBtn" class="image-nav-btn">◀ 上一張</button>
-                    <div class="annotation-image-wrapper">
-                        <img id="annotationImage" src="" alt="待標註圖片">
-
-                        <div id="annotationStatusOverlay" class="annotation-status-overlay" style="display: none;">
-                            <span>✓ 已校準</span>
+                <!-- 【【【 全新的序列導航與展示區 】】】 -->
+                <div class="sequence-navigation-container">
+                    <button id="prevSequenceBtn" class="sequence-nav-btn">◀ 上一序列</button>
+                    
+                    <div class="sequence-display-area">
+                        <!-- 1. 主預覽圖區 -->
+                        <div class="main-image-container">
+                            <img id="annotationImage" src="" alt="待標註圖片">
+                            <div id="annotationStatusOverlay" class="annotation-status-overlay" style="display: none;">
+                                <span>✓ 已校準</span>
+                            </div>
+                            <span id="mainImageFilename" class="image-filename-label"></span>
                         </div>
-
+                        
+                        <!-- 2. 序列縮圖列表 -->
+                        <div id="thumbnailContainer" class="thumbnail-container">
+                            <!-- 縮圖將由 JS 動態生成 -->
+                        </div>
                     </div>
-                    <button id="nextImageBtn" class="image-nav-btn">下一張 ▶</button>
+
+                    <button id="nextSequenceBtn" class="sequence-nav-btn">下一序列 ▶</button>
                 </div>
 
+                <!-- 【【【 標註工具列 (包含情境圖) 】】】 -->
                 <div class="annotation-form">
-                    <div class="form-group">
-                        <label>當時課堂情境 : 藍色位置為學生、紅色位置為老師</label>
-                        <div id="classroomLayoutVisualizer" class="classroom-layout-visualizer">
-                            <!-- 學生座位區 -->
-                            <div class="seating-chart">
-                                <!-- 第五排 -->
-                                <div class="desk-row">
-                                    <div class="desk" data-position="5-left"></div>
-                                    <div class="desk" data-position="5-center"></div>
-                                    <div class="desk" data-position="5-right"></div>
-                                </div>
-                                <!-- 第四排 -->
-                                <div class="desk-row">
-                                    <div class="desk" data-position="4-left"></div>
-                                    <div class="desk" data-position="4-center"></div>
-                                    <div class="desk" data-position="4-right"></div>
-                                </div>
-                                <!-- 第三排 -->
-                                <div class="desk-row">
-                                    <div class="desk" data-position="3-left"></div>
-                                    <div class="desk" data-position="3-center"></div>
-                                    <div class="desk" data-position="3-right"></div>
-                                </div>
-                                <!-- 第二排 -->
-                                <div class="desk-row">
-                                    <div class="desk" data-position="2-left"></div>
-                                    <div class="desk" data-position="2-center"></div>
-                                    <div class="desk" data-position="2-right"></div>
-                                </div>
-                                <!-- 第一排 -->
-                                <div class="desk-row">
-                                    <div class="desk" data-position="1-left"></div>
-                                    <div class="desk" data-position="1-center"></div>
-                                    <div class="desk" data-position="1-right"></div>
-                                </div>
-                            </div>
-                            <!-- 教師位置區 (黑板前) -->
-                            <div class="teacher-area">
-                                
-                                <div id="teacherPositionStatus" class="status-message" style="display: none;"></div>
+                    <div class="context-and-tools-container">
+                        <!-- 左側：情境圖 -->
+                        <div class="form-group context-visualizer-group">
+                            <label>當時課堂情境</label>
 
-                                <div class="position-zone-wrapper">
-                                    <div class="position-zone" data-position="右">右</div>
-                                    <div class="position-zone" data-position="偏右">偏右</div>
-                                    <div class="position-zone" data-position="中">中</div>
-                                    <div class="position-zone" data-position="偏左">偏左</div>
-                                    <div class="position-zone" data-position="左">左</div>
-                                </div>
+                            <div class="context-item" id="classroomStateDisplay">
+                                <strong>課堂活動:</strong> 
+                                <span id="classroomStateText" class="context-highlight">--</span>
+                            </div>
 
-                                <div class="blackboard-label">黑板</div>
-
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>請選擇您判斷的行為:</label>
-                        <!-- 【【【 全新的行為選擇器結構 】】】 -->
-                        <div id="behaviorSelector" class="behavior-selector-container">
-                            <!-- 內容將由 JavaScript 動態生成 -->
-                            <div class="behavior-category-column">
-                                <h4>--視線--</h4>
-                                <div class="behavior-buttons-wrapper" data-category="視線 (Gaze)">
-                                    <!-- JS 會在這裡填入按鈕 -->
+                            <div id="classroomLayoutVisualizer" class="classroom-layout-visualizer">
+                                <!-- 學生座位區 -->
+                                <div class="seating-chart">
+                                    <div class="desk-row">
+                                        <div class="desk" data-position="5-left"></div> <div class="desk" data-position="5-center"></div> <div class="desk" data-position="5-right"></div>
+                                    </div>
+                                    <div class="desk-row">
+                                        <div class="desk" data-position="4-left"></div> <div class="desk" data-position="4-center"></div> <div class="desk" data-position="4-right"></div>
+                                    </div>
+                                    <div class="desk-row">
+                                        <div class="desk" data-position="3-left"></div> <div class="desk" data-position="3-center"></div> <div class="desk" data-position="3-right"></div>
+                                    </div>
+                                    <div class="desk-row">
+                                        <div class="desk" data-position="2-left"></div> <div class="desk" data-position="2-center"></div> <div class="desk" data-position="2-right"></div>
+                                    </div>
+                                    <div class="desk-row">
+                                        <div class="desk" data-position="1-left"></div> <div class="desk" data-position="1-center"></div> <div class="desk" data-position="1-right"></div>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="behavior-category-column">
-                                <h4>--肢體(手部)--</h4>
-                                <div class="behavior-buttons-wrapper" data-category="肢體(手部) (Hand)">
-                                    <!-- JS 會在這裡填入按鈕 -->
-                                </div>
-                            </div>
-                            <div class="behavior-category-column">
-                                <h4>--身體姿態--</h4>
-                                <div class="behavior-buttons-wrapper" data-category="身體姿態 (Posture)">
-                                    <!-- JS 會在這裡填入按鈕 -->
-                                </div>
-                            </div>
-                            <div class="behavior-category-column">
-                                <h4>--互動--</h4>
-                                <div class="behavior-buttons-wrapper" data-category="互動 (Interaction)">
-                                    <!-- JS 會在這裡填入按鈕 -->
-                                </div>
-                            </div>
-                            <div class="behavior-category-column">
-                                <h4>--其他狀態--</h4>
-                                <div class="behavior-buttons-wrapper" data-category="其他狀態 (Other)">
-                                    <!-- JS 會在這裡填入按鈕 -->
+                                <!-- 教師位置區 -->
+                                <div class="teacher-area">
+                                    <div id="teacherPositionStatus" class="status-message" style="display: none;"></div>
+                                    <div class="position-zone-wrapper">
+                                        <div class="position-zone" data-position="右">右</div> <div class="position-zone" data-position="偏右">偏右</div> <div class="position-zone" data-position="中">中</div> <div class="position-zone" data-position="偏左">偏左</div> <div class="position-zone" data-position="左">左</div>
+                                    </div>
+                                    <div class="blackboard-label">黑板</div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- <div class="form-group">
-                        <label>請評估您此次標註的信度 (1:不太確定, 5:非常確定):</label>
-                        <div id="annoConfidenceRating" class="rating-stars">
-                            <input type="radio" id="anno-star5" name="anno_rating" value="5"><label for="anno-star5">★</label>
-                            <input type="radio" id="anno-star4" name="anno_rating" value="4"><label for="anno-star4">★</label>
-                            <input type="radio" id="anno-star3" name="anno_rating" value="3"><label for="anno-star3">★</label>
-                            <input type="radio" id="anno-star2" name="anno_rating" value="2"><label for="anno-star2">★</label>
-                            <input type="radio" id="anno-star1" name="anno_rating" value="1"><label for="anno-star1">★</label>
+                        
+                        <!-- 右側：行為選擇與操作 -->
+                        <div class="tools-group">
+                            <div class="form-group">
+                                <label>請選擇您判斷的行為: 每個類別可選一個行為</label>
+                                <div id="behaviorSelector" class="behavior-selector-container">
+                                    <div class="behavior-category-column"><h4>--視線--</h4><div class="behavior-buttons-wrapper" data-category="視線 (Gaze)"></div></div>
+                                    <div class="behavior-category-column"><h4>--肢體(手部)--</h4><div class="behavior-buttons-wrapper" data-category="肢體(手部) (Hand)"></div></div>
+                                    <div class="behavior-category-column"><h4>--身體姿態--</h4><div class="behavior-buttons-wrapper" data-category="身體姿態 (Posture)"></div></div>
+                                    <div class="behavior-category-column"><h4>--互動--</h4><div class="behavior-buttons-wrapper" data-category="互動 (Interaction)"></div></div>
+                                    <div class="behavior-category-column"><h4>--其他狀態--</h4><div class="behavior-buttons-wrapper" data-category="其他狀態 (Other)"></div></div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>請評估您此次標註的信度 (1:不太確定, 5:非常確定):</label>
+                                <div id="confidenceSlider" class="confidence-slider">
+                                    <div class="rating-block" data-value="1"><span>1</span></div> <div class="rating-block" data-value="2"><span>2</span></div> <div class="rating-block" data-value="3"><span>3</span></div> <div class="rating-block" data-value="4"><span>4</span></div> <div class="rating-block" data-value="5"><span>5</span></div>
+                                </div>
+                            </div>
+                             <div class="annotation-actions">
+                                 <button id="saveAnnotationBtn" class="button-primary">儲存此筆標註</button>
+                            </div>
                         </div>
-                    </div> -->
-                    <div class="form-group">
-                        <label>請評估您此次標註的信度 (1:不太確定, 5:非常確定):</label>
-                        <!-- 評分條容器 -->
-                        <div id="confidenceSlider" class="confidence-slider">
-                            <!-- 評分條的五個等級區塊 -->
-                            <div class="rating-block" data-value="1"><span>1</span></div>
-                            <div class="rating-block" data-value="2"><span>2</span></div>
-                            <div class="rating-block" data-value="3"><span>3</span></div>
-                            <div class="rating-block" data-value="4"><span>4</span></div>
-                            <div class="rating-block" data-value="5"><span>5</span></div>
-                        </div>
-                    </div>
-                    
-                    <div class="annotation-actions">
-                         <button id="saveAnnotationBtn" class="button-primary">儲存此筆標註</button>
                     </div>
                 </div>
             </div>
@@ -321,9 +273,12 @@
         </div>
 
         <!-- 視覺化圖表區 -->
-        <div class="chart-container">
-            <h4>學生狀態趨勢圖</h4>
-            <canvas id="behaviorTrendChart"></canvas>
+        <div class="chart-container" id="focusChartContainer" style="display: none;"> <!-- 新增 ID 並預設隱藏 -->
+            <h4>課堂專注度節奏圖</h4>
+            <p>圖表顏色反應專注度等級 (綠:高, 黃:中, 紅:低)。將滑鼠懸浮在圖表上以查看該時段的關鍵教學事件。</p>
+            <div class="chart-wrapper"> <!-- 新增一個 wrapper 以便控制高度 -->
+                <canvas id="focusPercentageChart"></canvas> <!-- 給予新的 ID -->
+            </div>
         </div>
 
         <!-- 逐段洞察區 -->
