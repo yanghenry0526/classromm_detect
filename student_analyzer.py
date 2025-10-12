@@ -60,9 +60,9 @@ STANDARD_BEHAVIOR_CATEGORIES = {
         {"label": "觸摸頭髮", "definition": "學生用手觸摸、撥弄或整理自己的頭髮。注意：即使手臂抬得較高，只要手部的主要動作是與頭髮互動，就【必須】使用此標籤，而不是『舉手』類標籤。"}
     ],
     "身體姿態": [
-        {"label": "坐姿直立", "definition": "學生上半身軀幹基本垂直於地面，或輕微前傾。"},
-        {"label": "身體前傾", "definition": "學生上半身軀幹明顯向前彎曲，靠近桌面。此行為描述的是一種【清醒狀態下】的姿態。如果學生頭部接觸桌面或手臂，應【優先使用】『趴睡』標籤。"},
-        {"label": "身體後靠", "definition": "學生背部倚靠在椅背上。"},
+         {"label": "坐姿直立", "definition": "【基準姿態】。學生的脊柱與椅子座位大致**垂直**，肩膀與臀部在一條垂線上。**【嚴格邊界】**: 只有當『身體後靠』和『身體前傾』的明確物理證據都**不存在**時，才可使用此標籤。它代表一個既沒有後靠也沒有明顯前傾的中立姿態。"},
+        {"label": "身體前傾", "definition": "【核心物理證據：上半身的重心越過桌面】。學生的肩膀明顯移動到臀部的前方，上半身與大腿形成**小於90度的銳角**，以更靠近桌面上的學習材料。**【絕對排除條款】**: 此行為描述的是一種**主動、清醒**的姿態。如果學生的頭部正在**接觸**手臂或桌面，則**必須**標註為『趴睡』(`P_SLP`)，而非此標籤。"},
+        {"label": "身體後靠", "definition": "【核心物理證據：背部與椅背的持續接觸】。學生的**背部或肩膀**能夠被清晰地觀察到**正在倚靠**在椅背上。上半身與大腿的角度通常**大於或等於90度**。這通常代表一種較為放鬆或被動的聽講姿態。"},
         {"label": "低頭(非學習)", "definition": "【極其嚴格的排除性標籤】。僅在你能夠【極度確信地】觀察到以下【全部】條件時才可使用：1. 學生頭部明顯低垂。2. 其視線【明確沒有】朝向任何學習材料（例如，看向地面、自己的懷中或空無一物的桌面）。3. 其手部沒有在進行任何學習相關操作。"},
         {"label": "趴睡", "definition": "學生將頭部【枕於】手臂或桌面上，呈現明確的休息或睡眠狀態。**【最高優先級】**：只要觀察到頭部接觸桌面或手臂的休息姿態，此標籤的優先級【高於】所有其他學習相關標籤（如『做筆記』、『目視書本』）。"},
         {"label": "托腮", "definition": "【核心定義：手部對頭部提供持續性支撐】。學生使用一隻或兩隻手的手掌、拳頭或手臂，支撐其下巴、臉頰或頭部的重量。這是一個純粹的物理姿態描述，不包含任何意圖推斷。"}
@@ -168,7 +168,122 @@ LABEL_TO_VALENCE = {
     for label in labels
 }
 
+def retrieve_hybrid_examples(image_path, student_position, teacher_pos, classroom_state, rag_objects):
+    """
+    【全新：混合式檢索 + 動態決策版】
+    同時執行視覺和文字檢索，融合結果後，再根據最佳匹配的真實距離動態決定範例數量。
+    """
+    # --- 步驟 1: 解包所有 RAG 物件 ---
+    model = rag_objects.get("model")
+    processor = rag_objects.get("processor")
+    image_collection = rag_objects.get("image_collection")
+    text_collection = rag_objects.get("text_collection")
+    device = rag_objects.get("device")
 
+    if not all([model, processor, image_collection, text_collection, device]):
+        print("  [Hybrid RAG]: RAG 物件不完整，跳過檢索。")
+        return []
+    if not os.path.isfile(image_path):
+        return []
+
+    try:
+        # --- 步驟 2: 準備視覺和文字查詢 ---
+        # 視覺查詢向量
+        query_image = Image.open(image_path).convert("RGB")
+        inputs = processor(images=query_image, return_tensors="pt").to(device)
+        with torch.no_grad():
+            image_features = model.get_image_features(**inputs)
+        norm_image_features = image_features / image_features.norm(p=2, dim=-1, keepdim=True)
+        query_embedding_img = norm_image_features.cpu().numpy().tolist()
+
+        # 文字查詢向量 (只包含情境，不猜測行為)
+        seating_area = "未知區域"
+        if "中間" in student_position: seating_area = "中間"
+        elif "左邊" in student_position: seating_area = "左側"
+        elif "右邊" in student_position: seating_area = "右側"
+        
+        context_text = f"學生座位在 {seating_area} 區域。課堂狀態是 {classroom_state}。"
+        
+        text_inputs = processor(text=[context_text], return_tensors="pt", padding=True, truncation=True).to(device)
+        with torch.no_grad():
+            text_features = model.get_text_features(**text_inputs)
+        norm_text_features = text_features / text_features.norm(p=2, dim=-1, keepdim=True)
+        query_embedding_txt = norm_text_features.cpu().numpy().tolist()
+
+        # --- 步驟 3: 執行並行檢索 ---
+        CANDIDATE_COUNT = 10 # 檢索更多候選者以利於融合
+        
+        image_results = image_collection.query(
+            query_embeddings=query_embedding_img, n_results=CANDIDATE_COUNT, include=['metadatas', 'distances']
+        )
+        text_results = text_collection.query(
+            query_embeddings=query_embedding_txt, n_results=CANDIDATE_COUNT, include=['metadatas', 'distances']
+        )
+        
+        # --- 步驟 4: RRF 結果融合 ---
+        scores = defaultdict(float)
+        k = 60  # RRF 的平滑參數
+
+        image_ids = image_results.get('ids', [[]])[0]
+        text_ids = text_results.get('ids', [[]])[0]
+
+        for rank, doc_id in enumerate(image_ids):
+            scores[doc_id] += 1 / (k + rank + 1)
+        for rank, doc_id in enumerate(text_ids):
+            scores[doc_id] += 1 / (k + rank + 1)
+        
+        if not scores:
+            print("  [Hybrid RAG]: 視覺和文字檢索均未找到任何結果。")
+            return []
+
+        sorted_fused_ids = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
+        
+        # --- 步驟 5: 獲取最佳匹配的真實距離 ---
+        top_fused_id = sorted_fused_ids[0]
+        img_dist_map = dict(zip(image_ids, image_results.get('distances', [[]])[0]))
+        txt_dist_map = dict(zip(text_ids, text_results.get('distances', [[]])[0]))
+        
+        best_score = min(img_dist_map.get(top_fused_id, 999.0), txt_dist_map.get(top_fused_id, 999.0))
+
+        # --- 步驟 6: 執行動態決策 ---
+        num_examples_to_use = 0
+        if best_score > NO_MATCH_THRESHOLD:
+            print(f"  [Hybrid RAG]: 無有效匹配 (最佳綜合距離 {best_score:.3f})，不使用範例。")
+            return []
+        elif best_score <= HIGH_CONFIDENCE_THRESHOLD:
+            print(f"  [Hybrid RAG]: 高信心匹配 (最佳綜合距離 {best_score:.3f})，使用 1 則範例。")
+            num_examples_to_use = 1
+        elif best_score <= MEDIUM_CONFIDENCE_THRESHOLD:
+            print(f"  [Hybrid RAG]: 中等信心匹配 (最佳綜合距離 {best_score:.3f})，使用 3 則範例。")
+            num_examples_to_use = 3
+        else:
+            print(f"  [Hybrid RAG]: 低信心匹配 (最佳綜合距離 {best_score:.3f})，使用 {MAX_RAG_RESULTS_TO_FETCH} 則範例。")
+            num_examples_to_use = MAX_RAG_RESULTS_TO_FETCH
+
+        final_ids_to_use = sorted_fused_ids[:num_examples_to_use]
+        
+        # --- 步驟 7: 提取並還原元數據 ---
+        all_metadatas_map = {meta['image_path']: meta for meta in image_results['metadatas'][0]}
+        all_metadatas_map.update({meta['image_path']: meta for meta in text_results['metadatas'][0]})
+        
+        final_examples_to_use = [all_metadatas_map[id] for id in final_ids_to_use if id in all_metadatas_map]
+
+        restored_examples = []
+        for meta in final_examples_to_use:
+            restored_meta = meta.copy()
+            for key, value in restored_meta.items():
+                if isinstance(value, str) and value.strip().startswith(('{', '[')):
+                    try: restored_meta[key] = json.loads(value)
+                    except json.JSONDecodeError: pass
+            restored_examples.append(restored_meta)
+
+        if restored_examples:
+            print(f"  [Hybrid RAG]: 成功融合並檢索到 {len(restored_examples)} 筆高品質範例。")
+        return restored_examples
+
+    except Exception as e:
+        print(f"  [Hybrid RAG]: 混合式檢索過程中發生嚴重錯誤: {e}")
+        return []
 
 def load_teacher_positions(json_path, start_time_offset_str=""):
     if not json_path or not os.path.isfile(json_path):
@@ -234,8 +349,6 @@ def load_and_preprocess_calibrations(json_path):
     except Exception as e:
         print(f"❌ 錯誤：處理校準檔案 {json_path} 時失敗: {e}")
         return {}
-
-
 
 # ---------------------------
 # 輔助函數
@@ -453,60 +566,6 @@ def analyze_single_student(student_task, client, context_paths, report_date_str,
         # 拋出一個錯誤，讓 run_all_students.py 可以捕捉到
         raise IOError(f"儲存學生 '{student_id}' 的 JSON 檔案時發生問題：{e}")
 
-# def load_and_preprocess_calibrations(json_path):
-#     """
-#     【全新】讀取、索引並排序 calibration_export.json。
-#     這一步是將扁平的數據列表，轉換成一個高效的、以錯誤為索引的知識庫。
-#     """
-#     if not os.path.isfile(json_path):
-#         print("提示：未找到校準檔案 (calibration_export.json)，將不使用 Few-Shot 修正。")
-#         return {}
-
-#     try:
-#         with open(json_path, 'r', encoding='utf-8') as f:
-#             data = json.load(f)
-        
-#         indexed_calibrations = defaultdict(list)
-#         for record in data:
-#             original_behavior = record.get("original_behavior")
-#             if original_behavior:
-#                 indexed_calibrations[original_behavior].append(record)
-        
-#         for behavior in indexed_calibrations:
-#             indexed_calibrations[behavior].sort(key=lambda x: x.get('error_rating', 5))
-            
-#         print(f"✅ 成功載入並索引 {len(data)} 筆校準紀錄，涵蓋 {len(indexed_calibrations)} 種錯誤類型。")
-#         return indexed_calibrations
-
-#     except Exception as e:
-#         print(f"❌ 錯誤：處理校準檔案 {json_path} 時失敗: {e}")
-#         return {}
-
-# def select_relevant_examples(indexed_calibrations, previous_batch_results=None, num_examples=1):
-#     """
-#     【全新】從索引好的知識庫中，動態選擇最相關的範例。
-#     """
-#     if not indexed_calibrations:
-#         return []
-
-#     if previous_batch_results and "analysis" in previous_batch_results:
-#         highlights = previous_batch_results["analysis"].get("per_image_highlights", [])
-#         if highlights:
-#             behavior_counts = Counter(
-#                 behavior
-#                 for hl in highlights
-#                 for behavior in hl.get("behavior_category", []) if isinstance(behavior, str) # 確保是字串
-#             )
-#             if behavior_counts:
-#                 most_common_error, _ = behavior_counts.most_common(1)[0]
-#                 if most_common_error in indexed_calibrations:
-#                     print(f"  [動態Few-Shot]: 偵測到近期潛在錯誤 '{most_common_error}'，選取針對性修正範例。")
-#                     return indexed_calibrations[most_common_error][:num_examples]
-
-#     print("  [動態Few-Shot]: 未找到針對性範例，選取全域最嚴重錯誤範例。")
-#     all_examples = [ex for sublist in indexed_calibrations.values() for ex in sublist]
-#     all_examples.sort(key=lambda x: x.get('error_rating', 5))
-#     return all_examples[:num_examples]
 def retrieve_visual_examples_mm_rag(image_path, rag_objects):
     """
     【全新：v2.0 動態 RAG 版】
@@ -604,20 +663,56 @@ def format_examples_for_prompt(examples_list):
     prompt_parts = ["\n---", "**【第五部分：錯誤案例學習與校準 (Few-Shot Examples)】**", "你必須從以下真人校準的案例中學習，以修正你的判斷模型。\n"]
     
     for i, ex in enumerate(examples_list, 1):
-        context = ex.get("context", {})
+        # --- 穩健地處理 context ---
+        context_str = ex.get("context", "{}")
+        try:
+            if isinstance(context_str, str): 
+                context = json.loads(context_str)
+            else: 
+                context = context_str
+        except json.JSONDecodeError:
+            context = {}
+
         reasoning = context.get("original_ai_reasoning", "無紀錄")
         confidence = context.get("original_ai_confidence", 0.0)
         seating = context.get("seating_position", "未知座位")
         
         example_context_desc = f"當時學生坐在 **{seating}**，AI 在該次分析中對此圖的信心度為 **{confidence:.2f}**。"
         
+        # --- 【【【核心修正：讀取並格式化合併後的標籤】】】 ---
+        
+        # 1. 安全地獲取專家糾正的輸出（它應該是字典或 JSON 字串）
+        correct_output_raw = ex.get('merged_corrected_behaviors', "無正確標註紀錄")
+        
+        # 2. 嘗試將其轉換為字典
+        correct_output_dict = {}
+        if isinstance(correct_output_raw, str):
+            try:
+                correct_output_dict = json.loads(correct_output_raw)
+            except json.JSONDecodeError:
+                pass # 如果解析失敗，就保持為空字典
+        elif isinstance(correct_output_raw, dict):
+             correct_output_dict = correct_output_raw
+
+        # 3. 將字典轉換成適合Prompt閱讀的字串格式
+        if correct_output_dict:
+            # 格式化為 JSON 字串，確保 AI 能理解其結構
+            correct_output_str = json.dumps(correct_output_dict, ensure_ascii=False)
+        else:
+            # 如果沒有有效字典，則使用原始值作為備用
+            correct_output_str = str(correct_output_raw)
+
+        # --- 【【【修正結束】】】 ---
+
+        # 4. 將格式化後的字串放入 Prompt
         part = f"""
 **[學習案例 #{i}]**
 *   **情境描述**: {example_context_desc}
 *   **AI 錯誤推理 (應避免)**: "{reasoning}"
 *   **AI 錯誤輸出 (應避免)**: "{ex.get('original_behavior')}"
-*   **專家糾正的正確輸出**: "{ex.get('corrected_behavior')}"
+*   **專家糾正的正確輸出**: {correct_output_str}
 """
+        
         prompt_parts.append(part)
     
     return "\n".join(prompt_parts)
@@ -762,11 +857,12 @@ def load_classroom_states(json_path):
 
 def get_behavior_sequence_analysis_system_prompt(student_position, has_teacher_context , few_shot_prompt_str=""):
     """
-    【v14.4 - 終極重構版】
-    此版本在 v14.3 的基礎上進行了結構性重構，將所有規則模塊化，
-    消除了邏輯冗餘，並將決策樹統一整合，達到了最高的清晰度與可維護性。
+    【v17.0 - 完整決策樹 + 強制多維度標註版】
+    此版本保留了原始的、詳細的五層決策流程，同時在輸出格式部分採用了
+    最嚴格的強制性指令，要求AI必須為「視線」和「身體姿態」兩個維度進行標註。
     """
     # --- 1. 行為編碼表 (靜態模塊) ---
+    # (此部分完全不變)
     behavior_table_for_prompt = "\n\n**【學習行為編碼表】**\n你 **必須** 且 **只能** 從以下列表的「編碼 (Code)」中選擇行為進行標註。...\n"
     for code, label in BEHAVIOR_CODES.items():
         definition = ""
@@ -781,6 +877,7 @@ def get_behavior_sequence_analysis_system_prompt(student_position, has_teacher_c
     behavior_table_for_prompt += "\n*如果行為因任何原因無法清晰判斷，請 **必須** 使用 **`O_UNK`** 編碼。*\n"
 
     # --- 2. 空間與攝影機規則 (動態模塊) ---
+    # (此部分完全不變)
     analysis_view_rules = ""
     if "左" in student_position:
         analysis_view_rules = "*   **分析視角**: 拍攝該學生的【學生個人照片序列】來自教室前方的【左側】攝影機。\n*   **視線基準**: 對於這位學生，【正面朝向鏡頭】僅代表他在看教室的【左前方】。為了看向【教室正前方中心】，他的頭部必須輕微地朝向他自己的【右側】轉動。"
@@ -810,11 +907,10 @@ def get_behavior_sequence_analysis_system_prompt(student_position, has_teacher_c
 """
 
     # --- 3. 行為決策協議 (動態模塊) ---
-    # 將前後排規則與統一決策協議整合成一個大的、連貫的決策流程
+    # (此部分完全不變，保留您原始的完整決策樹)
     is_front_row = any(keyword in student_position for keyword in ["第一", "第二"])
     is_rear_row = any(keyword in student_position for keyword in ["第三", "第四"])
 
-    # 3.1 定義前後排獨有的規則
     front_row_rules = """
 *   **低頭行為的分診決策樹 (軸線檢查版)**:
     1.  **軸線檢查**: 判斷頭部是【正下方】（判定 `V_BOK`）還是【側下方】（判定 `V_CLS`）。
@@ -827,22 +923,31 @@ def get_behavior_sequence_analysis_system_prompt(student_position, has_teacher_c
 *   **低頭行為的「絕對學習推定」原則**: 只要頭部低垂，就**必須、無條件地**判定為 `V_BOK`。
 *   **前方視線的「教師優先」原則**: 只要視線朝前，就**優先**標註為 `V_TCH`。
 """
-
-    # 3.2 根據學生位置選擇對應規則
+    
     if is_rear_row:
         position_specific_rules = f"""
 **【第二部分：後排學生分析協議 (絕對推斷模式)】**
 你必須遵循以下不可動搖的推斷鐵則：
 {rear_row_rules}
 """
-    else: # 預設為前排
+    else:
         position_specific_rules = f"""
 **【第二部分：前排學生分析協議 (高證據模式)】**
 你的所有判斷都必須基於【嚴格的視覺證據】：
 {front_row_rules}
 """
-
-    # 3.3 定義統一的、後續的行為決策流程
+    posture_adjudication_framework = """
+*   **【身體姿態的嚴格物理裁決框架】**:
+    *   **基準假設**: 你的姿態分析**必須**從「`P_STR` (坐姿直立)」的基準假設開始。
+    *   **決策步驟 1 (檢查 `P_BACK`)**: 檢查是否有【學生背部或肩膀與椅背發生持續接觸】的視覺證據？
+        *   **是**: 則姿態**必須**標註為 `P_BACK`。**姿態決策結束。**
+        *   **否**: 進入下一步。
+    *   **決策步驟 2 (檢查 `P_LEAN`)**: 檢查是否有【學生上半身重心明顯越過桌面，且腰部形成銳角】的視覺證據？
+        *   **是**: 則姿態**必須**標註為 `P_LEAN`。**姿態決策結束。**
+        *   **否**: 進入下一步。
+    *   **決策步驟 3 (最終裁定)**: 如果前兩步的明確物理證據都不存在，則該姿態**必須**被裁定為 `P_STR`。
+"""
+    
     universal_decision_flow = """
 ---
 **【第三部分：統一行為決策流程 (全體適用)】**
@@ -879,7 +984,7 @@ def get_behavior_sequence_analysis_system_prompt(student_position, has_teacher_c
 1.  **【班級整體照片】**: 你的【空間座標系】基準。
 2.  **【學生個人照片序列】**: 你的主要分析對象。
 3.  **【課堂狀態】**: 判斷行為動機的核心上下文。
-4.  **【學生座位文字描述】**: `{student_position}`，用於輔助定位。
+4.  **【學生座位文字描述】**: `{student_position}`。
 {teacher_context_header}
 
 {camera_and_spatial_rules}
@@ -893,16 +998,26 @@ def get_behavior_sequence_analysis_system_prompt(student_position, has_teacher_c
 {few_shot_prompt_str} 
 
 ---
-**【第四部分：輸出格式要求 - 嚴謹推理與簡明輸出】**
+**【第四部分：輸出格式要求 - 【【【強制性】】】多維度標註協議】**
 *   你的回答**必須**是一個結構完整的、單一的 JSON 物件。
-*   `behavior_category` 的值**必須**是一個包含 1 到 2 個編碼字串的**陣列 (Array)**。
+*   **【絕對規則】**：對於 `per_image_highlights` 中的每一張圖片，你**必須**嚴格按照以下規則生成 `behavior_category` 陣列：
+    1.  **核心視線 (Gaze)**: **必須**從所有 `V_` 開頭的編碼中選擇一個最合適的。這是**【必要項】**。
+    2.  **基礎姿態 (Posture)**: **必須**從所有 `P_` 開頭的編碼中選擇一個最合適的。這是**【必要項】**。
+    3.  **主要動作 (Action)**: 如果學生正在進行一個比「看」和「坐」更顯著的動作（例如 `H_NOT` 做筆記, `I_HND_A` 舉手, `O_DRK_W` 喝水等），則**額外**從 `H_`, `I_`, `O_` 編碼中選擇一個。如果沒有明顯動作，則**不添加**此項。
+
+*   `behavior_category` 的值**必須**是一個陣列 (Array)，其中：
+    *   **總是包含**一個 `V_` (視線) 編碼。
+    *   **總是包含**一個 `P_` (姿態) 編碼。
+    *   **可以包含**零個或一個額外的「動作」編碼。
+    *   陣列的**最終長度必須是 2 或 3**。任何其他長度都是不被允許的。
+
 *   `per_image_highlights` 的每個物件中**必須包含** `image_index_in_sequence`, `context_description`, `behavior_category`, 和 `confidence` 這四個鍵。
-*   **【關鍵指令】**: `context_description` 內容**必須極度簡潔**，例如："後排協議 -> 低頭推定" 或 "左側區域規則 -> 視線匹配"。
+*   `context_description` 內容**必須極度簡潔**，例如："後排協議 -> 低頭推定" 或 "動作優先：動態書寫"。
 
 **【輸出 JSON 格式範例】**
 ```json
 {{
-  "sequence_analysis_confidence": 0.97,
+  "sequence_analysis_confidence": 0.98,
   "per_image_highlights": [
     {{
       "image_index_in_sequence": 0,
@@ -913,13 +1028,13 @@ def get_behavior_sequence_analysis_system_prompt(student_position, has_teacher_c
     {{
       "image_index_in_sequence": 1,
       "context_description": "左側區域規則：頭部右轉，匹配老師位置。",
-      "behavior_category": ["V_TCH"],
+      "behavior_category": ["V_TCH", "P_LEAN"],
       "confidence": 0.99
     }},
     {{
       "image_index_in_sequence": 2,
-      "context_description": "社交優先：向前協作，判定為 V_BOK。",
-      "behavior_category": ["V_BOK", "P_LEAN"],
+      "context_description": "動作優先：動態書寫。",
+      "behavior_category": ["H_NOT", "V_BOK", "P_LEAN"],
       "confidence": 0.98
     }}
   ]
@@ -1260,30 +1375,31 @@ def find_closest_position(representative_timestamp, sorted_position_list, max_ti
 
 def process_single_batch(batch_idx, image_batch_info, teacher_positions_data, sorted_classroom_photos, classroom_states, client, student_id, student_position, deployment_names, rag_objects):
     """
-    【Multimodal RAG 升級版】
-    處理單一圖片批次，並根據視覺相似度動態注入 Few-Shot 範例。
+    【v14.0 - 混合式檢索版】
+    處理單一圖片批次，呼叫新的混合式檢索函數來動態注入 Few-Shot 範例。
     """
     batch_student_paths = [info["path"] for info in image_batch_info]
     batch_image_filenames = [info["filename"] for info in image_batch_info]
     
+    # --- 為當前批次查找所有情境數據 (此部分邏輯不變) ---
     representative_timestamp = image_batch_info[0]["timestamp_obj"]
-
-    # --- 【【【核心修改點：替換為 Multimodal RAG 檢索】】】 ---
-    # 使用批次中的第一張圖片作為代表，來進行視覺搜索
     representative_image_path = image_batch_info[0]["path"]
-    selected_examples = retrieve_visual_examples_mm_rag(
+    
+    teacher_position_text = find_closest_position(representative_timestamp, teacher_positions_data)
+    classroom_view_path = find_closest_image_path(representative_timestamp, sorted_classroom_photos)
+    classroom_state = find_state_for_timestamp(representative_timestamp, classroom_states)
+
+    # --- 【【【核心修改點：呼叫新的混合式檢索函數】】】 ---
+    selected_examples = retrieve_hybrid_examples(
         image_path=representative_image_path,
-        rag_objects=rag_objects,
-        # num_examples=NUM_RAG_EXAMPLES  # 您可以調整檢索數量
+        student_position=student_position,
+        teacher_pos=teacher_position_text,
+        classroom_state=classroom_state,
+        rag_objects=rag_objects
     )
     # --- 【【【修改結束】】】 ---
     
     few_shot_prompt_str = format_examples_for_prompt(selected_examples)
-
-    # --- 為當前批次查找所有情境數據 (此部分邏輯不變) ---
-    teacher_position_text = find_closest_position(representative_timestamp, teacher_positions_data)
-    classroom_view_path = find_closest_image_path(representative_timestamp, sorted_classroom_photos)
-    classroom_state = find_state_for_timestamp(representative_timestamp, classroom_states)
 
     # --- 呼叫分析函數 (此部分邏輯不變) ---
     sequence_analysis_data = analyze_student_behavior_from_images_sequence(

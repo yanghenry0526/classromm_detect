@@ -1,26 +1,26 @@
-# run_all_students.py (v12.0 - 參數傳遞修正版)
+# run_all_students.py (v14.0 - Hybrid Search 版)
 import os
 import csv
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
-from openai import AzureOpenAI, AuthenticationError
+from openai import AzureOpenAI
 from dotenv import load_dotenv
-
-# 從分析模組匯入核心函數
-from student_analyzer import analyze_single_student
 import torch
 import chromadb
 from transformers import CLIPProcessor, CLIPModel
+
+# 從分析模組匯入核心函數
+from student_analyzer import analyze_single_student
 
 # ==========================================================================
 # --- 核心配置區 (所有設定都在此完成) ---
 # ==========================================================================
 # 1. 報告日期設定
-REPORT_DATE_STRING = "09/07"
+REPORT_DATE_STRING = "09/21"
 
 # 2. 要分析的日期 (對應資料夾名稱)
-ANALYSIS_DATE_MMDD = "0907"
+ANALYSIS_DATE_MMDD = "0921"
 
 # 3. 學生照片起始時間 (HH:MM:SS)
 START_TIME_OFFSET_CENTER = "00:00:00"
@@ -32,50 +32,52 @@ EXCLUDED_IDS = []
 
 # 5. 基礎路徑與檔案設定
 MAX_CONCURRENT_STUDENTS = 3
-CALIBRATION_DB_PATH = r'C:\Users\User\Desktop\test\training_json\calibration_export.json'
 STUDENT_CONFIG_PATH = 'students_config.csv'
 
-# ✅ --- 新增：讀取環境變數和模型部署名稱 ---
+# 【【【核心修改點 1：指向新的混合式資料庫】】】
+VECTOR_DB_PATH = "student_behavior_vectordb_hybrid"
+IMAGE_COLLECTION_NAME = "behavior_images"
+TEXT_COLLECTION_NAME = "behavior_texts"
+
+# ✅ --- 讀取環境變數和模型部署名稱 ---
 load_dotenv()
 VISION_DEPLOYMENT_NAME = os.getenv("CHAT_COMPLETION_NAME")
-SUMMARY_DEPLOYMENT_NAME = os.getenv("CHAT_COMPLETION_NAME") # 根據您的 .env，它們是相同的
+SUMMARY_DEPLOYMENT_NAME = os.getenv("CHAT_COMPLETION_NAME")
 
 # --- 資料庫根目錄 ---
 PHOTO_BASE_FOLDER = r'C:\Users\User\Desktop\test\student_week_photo'
 
 # --- 輔助資料的【完整路徑】---
 CLASSROOM_VIEW_FOLDER = rf'C:\Users\User\Desktop\test\student_full_classroom\{ANALYSIS_DATE_MMDD}_english_class'
-# TEACHER_POS_JSON = rf'C:\Users\User\Desktop\test\teacher_position\{ANALYSIS_DATE_MMDD}_position.json'。
-TEACHER_POS_JSON = rf'C:\Users\User\Desktop\test\teacher_position\0907_position.json'
-
-# CLASSROOM_STATE_JSON = rf'C:\Users\User\Desktop\test\SynologyDrive\image\上課影片\{ANALYSIS_DATE_MMDD}\老師\TXT\{ANALYSIS_DATE_MMDD}.json'
-CLASSROOM_STATE_JSON = rf'C:\Users\User\Desktop\test\SynologyDrive\image\上課影片\0907\老師\TXT\0907.json'
+TEACHER_POS_JSON = rf'C:\Users\User\Desktop\test\teacher_position\0921_position.json'
+CLASSROOM_STATE_JSON = rf'C:\Users\User\Desktop\test\SynologyDrive\image\上課影片\0921\老師\0921.json'
 
 # ==========================================================================
 # --- 輔助函數 (無需修改) ---
 # ==========================================================================
 def generate_task_list(students_config, base_photo_path, date_mmdd, offsets, excluded_ids):
-    # ... (此函式內容不變)
     task_list = []
     for student in students_config:
-        student_id_num = int(student['id_number'])
-        if student_id_num in excluded_ids:
-            print(f"🚫 已屏蔽: 學生 {student['name']} (ID: {student_id_num}) 將被跳過。")
-            continue
-        photo_folder = os.path.join(base_photo_path, date_mmdd, f"ID_{student_id_num}", "Keyframes")
-        if not os.path.isdir(photo_folder) or not os.listdir(photo_folder):
-            print(f"🟡 警告：學生 {student['name']} (ID: {student_id_num}) 的照片路徑不存在或為空，已跳過。")
-            continue
-        position = student['position']
-        student_offset = "00:00:00"
-        if "中間" in position: student_offset = offsets['center']
-        elif "左邊" in position: student_offset = offsets['left']
-        elif "右邊" in position: student_offset = offsets['right']
-        task_list.append({'id': student['name'], 'number': student_id_num, 'folder': photo_folder, 'position': position, 'start_offset': student_offset})
+        try:
+            student_id_num = int(student['id_number'])
+            if student_id_num in excluded_ids:
+                print(f"🚫 已屏蔽: 學生 {student['name']} (ID: {student_id_num}) 將被跳過。")
+                continue
+            photo_folder = os.path.join(base_photo_path, date_mmdd, f"ID_{student_id_num}", "Keyframes")
+            if not os.path.isdir(photo_folder) or not os.listdir(photo_folder):
+                print(f"🟡 警告：學生 {student['name']} (ID: {student_id_num}) 的照片路徑不存在或為空，已跳過。")
+                continue
+            position = student['position']
+            student_offset = "00:00:00"
+            if "中間" in position: student_offset = offsets['center']
+            elif "左邊" in position: student_offset = offsets['left']
+            elif "右邊" in position: student_offset = offsets['right']
+            task_list.append({'id': student['name'], 'number': student_id_num, 'folder': photo_folder, 'position': position, 'start_offset': student_offset})
+        except (ValueError, KeyError) as e:
+            print(f"🟡 警告：處理學生設定檔中的 '{student.get('name', '未知')}' 時發生錯誤: {e}，已跳過。")
     return task_list
 
 def load_students_config(config_path):
-    # ... (此函式內容不變)
     if not os.path.isfile(config_path):
         print(f"❌ 致命錯誤：找不到學生設定檔: {config_path}")
         return None
@@ -90,7 +92,7 @@ def load_students_config(config_path):
 # --- 主執行區塊 ---
 # ==========================================================================
 def main():
-    print("--- 智慧學習分析系統 v13.0 - Multimodal RAG 版 ---")
+    print("--- 智慧學習分析系統 v14.0 - Hybrid Search RAG 版 ---")
     
     # --- 步驟 1: 整理所有路徑和設定 ---
     final_context_paths = {'classroom_view': CLASSROOM_VIEW_FOLDER, 'teacher_pos': TEACHER_POS_JSON, 'classroom_state': CLASSROOM_STATE_JSON}
@@ -101,6 +103,7 @@ def main():
     print(f"報告日期: {REPORT_DATE_STRING}, 分析日期: {ANALYSIS_DATE_MMDD}")
     print(f"屏蔽學生ID: {EXCLUDED_IDS}")
     print(f"視覺模型: {deployment_names['vision']}, 總結模型: {deployment_names['summary']}")
+    print(f"向量資料庫: {VECTOR_DB_PATH} (Image: {IMAGE_COLLECTION_NAME}, Text: {TEXT_COLLECTION_NAME})")
     print("-" * 60)
 
     # --- 步驟 2: 生成任務清單 ---
@@ -114,45 +117,40 @@ def main():
     print(f"✅ 成功為 {len(all_students_tasks)} 位學生生成了分析任務。")
     print("-" * 60)
 
-    # --- 【【【核心修改點：合併初始化邏輯】】】 ---
     # --- 步驟 3: 初始化所有共用物件 (OpenAI Client 和 RAG) ---
     try:
-        # 初始化 OpenAI Client
         print("正在初始化 Azure OpenAI client...")
         client = AzureOpenAI(api_key=os.getenv("AZURE_OPENAI_KEY"), azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"), api_version="2024-02-01")
         client.models.list()
         print("✅ Azure OpenAI client 初始化成功。")
         
-        # 初始化 Multimodal RAG 物件
         print("正在載入 Multimodal RAG (CLIP) 模型及資料庫...")
-        if torch.cuda.is_available():
-            mm_rag_device = torch.device("cuda")
-        else:
-            mm_rag_device = torch.device("cpu")
+        mm_rag_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         mm_rag_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32", use_safetensors=True).to(mm_rag_device)
         mm_rag_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
         mm_rag_model.eval()
 
-        chroma_client = chromadb.PersistentClient(path="student_behavior_vectordb")
-        mm_rag_collection = chroma_client.get_collection(name="behavior_calibrations")
-        print(f"✅ Multimodal RAG 準備就緒，裝置: {mm_rag_device}，資料庫中有 {mm_rag_collection.count()} 筆向量。")
+        # 【【【核心修改點 2：獲取兩個 Collection】】】
+        chroma_client = chromadb.PersistentClient(path=VECTOR_DB_PATH)
+        image_collection = chroma_client.get_collection(name=IMAGE_COLLECTION_NAME)
+        text_collection = chroma_client.get_collection(name=TEXT_COLLECTION_NAME)
+        print(f"✅ RAG 準備就緒，裝置: {mm_rag_device}。圖片庫: {image_collection.count()} 筆, 文字庫: {text_collection.count()} 筆。")
 
-        # 將所有 RAG 相關物件打包成一個字典
+        # 【【【核心修改點 3：將兩個 Collection 打包傳遞】】】
         rag_objects = {
             "model": mm_rag_model,
             "processor": mm_rag_processor,
-            "collection": mm_rag_collection,
+            "image_collection": image_collection,
+            "text_collection": text_collection,
             "device": mm_rag_device
         }
 
     except Exception as e:
-        # 任何一個初始化失敗，都直接終止程式
         print(f"❌ 致命錯誤: 初始化共用物件時失敗: {e}。程式終止。")
         return
     
     print("-" * 60)
-    # --- 【【【修改結束】】】 ---
     
     # --- 步驟 4: 並行處理所有任務 ---
     with ThreadPoolExecutor(max_workers=MAX_CONCURRENT_STUDENTS) as executor:
