@@ -1541,54 +1541,116 @@ def api_get_image_context():
         traceback.print_exc()
         return jsonify({"error": f"伺服器內部錯誤: {str(e)}"}), 500
 
+# @app.route('/api/teacher/get_comprehensive_report_by_date')
+# @login_required
+# def api_get_comprehensive_report_by_date():
+#     """
+#     根據日期獲取由分析引擎生成的課堂綜合報告。
+#     """
+#     # 1. 權限檢查：確保只有老師可以訪問
+#     if current_user.role != 'teacher':
+#         return jsonify({"error": "權限不足"}), 403
+
+#     # 2. 獲取前端請求的日期參數
+#     selected_date_str = request.args.get('date') # 例如，前端會傳來 "2025-09-14"
+#     if not selected_date_str:
+#         return jsonify({"error": "必須提供日期參數"}), 400
+
+#     try:
+#         # 3. 根據日期，構建出目標JSON檔案的完整路徑
+#         # 將 "2025-09-14" 轉換為 "0914" 以匹配檔名
+#         date_obj = datetime.datetime.strptime(selected_date_str, '%Y-%m-%d')
+#         date_suffix_for_filename = date_obj.strftime('%m%d')
+
+#         # 報告所在的資料夾路徑 (您指定的)
+#         report_folder = r'C:\Users\User\Desktop\test\classroom_analysis_report'
+        
+#         # 組合出完整的檔案路徑
+#         report_filename = f"classroom_analysis_report_{date_suffix_for_filename}.json"
+#         report_filepath = os.path.join(report_folder, report_filename)
+        
+#         print(f"綜合報告請求: 日期='{selected_date_str}', 正在查找檔案='{report_filepath}'")
+
+#         # 4. 檢查檔案是否存在，並讀取內容
+#         if not os.path.isfile(report_filepath):
+#             print(f"  -> 警告: 找不到綜合分析報告檔案 {report_filepath}")
+#             # 即使找不到檔案，也正常返回一個空數據的訊息，避免前端報錯
+#             return jsonify({
+#                 "message": "暫無此日期的課堂綜合洞察報告。",
+#                 "report_data": None
+#             }), 200
+
+#         with open(report_filepath, 'r', encoding='utf-8') as f:
+#             data = json.load(f)
+        
+#         # 5. 將讀取到的JSON內容作為回應返回給前端
+#         return jsonify({"report_data": data})
+
+#     except Exception as e:
+#         # 如果過程中發生任何錯誤，捕獲並返回一個服務器錯誤訊息
+#         print(f"獲取課堂綜合報告時發生錯誤: {e}")
+#         return jsonify({"error": "伺服器在獲取綜合報告時發生錯誤"}), 500
+
 @app.route('/api/teacher/get_comprehensive_report_by_date')
 @login_required
 def api_get_comprehensive_report_by_date():
     """
-    根據日期獲取由分析引擎生成的課堂綜合報告。
+    【v3.0 修正版】根據日期獲取由分析引擎生成的課堂綜合報告。
+    此版本使用更穩健的 glob 模式來查找檔案，並確保所有必要數據一次性返回。
     """
-    # 1. 權限檢查：確保只有老師可以訪問
     if current_user.role != 'teacher':
         return jsonify({"error": "權限不足"}), 403
 
-    # 2. 獲取前端請求的日期參數
-    selected_date_str = request.args.get('date') # 例如，前端會傳來 "2025-09-14"
+    selected_date_str = request.args.get('date')
     if not selected_date_str:
         return jsonify({"error": "必須提供日期參數"}), 400
 
     try:
-        # 3. 根據日期，構建出目標JSON檔案的完整路徑
-        # 將 "2025-09-14" 轉換為 "0914" 以匹配檔名
         date_obj = datetime.datetime.strptime(selected_date_str, '%Y-%m-%d')
+        # ★★★ 核心修正 1: 使用更靈活的日期後綴來匹配檔名 ★★★
+        # 這將匹配 YYYY-MM-DD -> MMDD (例如 0928)
         date_suffix_for_filename = date_obj.strftime('%m%d')
 
-        # 報告所在的資料夾路徑 (您指定的)
-        report_folder = r'C:\Users\User\Desktop\test\classroom_analysis_report'
-        
-        # 組合出完整的檔案路徑
-        report_filename = f"classroom_analysis_report_{date_suffix_for_filename}.json"
-        report_filepath = os.path.join(report_folder, report_filename)
-        
-        print(f"綜合報告請求: 日期='{selected_date_str}', 正在查找檔案='{report_filepath}'")
+        report_folder_path = app.config.get('CLASSROOM_ANALYSIS_FOLDER', r'C:\Users\User\Desktop\test\classroom_analysis_report')
+        if not os.path.isdir(report_folder_path):
+            print(f"  -> 嚴重錯誤: 綜合報告資料夾不存在: {report_folder_path}")
+            return jsonify({"error": f"伺服器設定錯誤：找不到綜合報告資料夾"}), 500
 
-        # 4. 檢查檔案是否存在，並讀取內容
-        if not os.path.isfile(report_filepath):
-            print(f"  -> 警告: 找不到綜合分析報告檔案 {report_filepath}")
-            # 即使找不到檔案，也正常返回一個空數據的訊息，避免前端報錯
+        # ★★★ 核心修正 2: 建立更具彈性的檔案查找模式 ★★★
+        # 模式1: classroom_analysis_report_MMDD.json (例如 classroom_analysis_report_0928.json)
+        pattern1 = os.path.join(report_folder_path, f"classroom_analysis_report_{date_suffix_for_filename}.json")
+        # 模式2: classroom_analysis_report_*_MMDD.json (例如 classroom_analysis_report_english_0928.json)
+        pattern2 = os.path.join(report_folder_path, f"classroom_analysis_report_*_{date_suffix_for_filename}.json")
+        
+        print(f"綜合報告請求: 日期='{selected_date_str}', 正在查找檔案...")
+        print(f"  -> 嘗試模式 1: '{pattern1}'")
+        matching_files = glob.glob(pattern1)
+        
+        if not matching_files:
+            print(f"  -> 模式 1 未找到，嘗試模式 2: '{pattern2}'")
+            matching_files = glob.glob(pattern2)
+
+        if not matching_files:
+            print(f"  -> 警告: 兩種模式均未找到符合的綜合分析報告檔案。")
             return jsonify({
                 "message": "暫無此日期的課堂綜合洞察報告。",
                 "report_data": None
             }), 200
 
+        report_filepath = matching_files[0]
+        print(f"  -> 成功找到檔案: {os.path.basename(report_filepath)}")
+
         with open(report_filepath, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
         # 5. 將讀取到的JSON內容作為回應返回給前端
+        #    前端的JS會從 'report_data' 這個 key 來讀取整個 JSON 物件
         return jsonify({"report_data": data})
 
     except Exception as e:
-        # 如果過程中發生任何錯誤，捕獲並返回一個服務器錯誤訊息
-        print(f"獲取課堂綜合報告時發生錯誤: {e}")
+        import traceback
+        print(f"獲取課堂綜合報告時發生嚴重錯誤: {e}")
+        traceback.print_exc()
         return jsonify({"error": "伺服器在獲取綜合報告時發生錯誤"}), 500
 
 @app.route('/api/teacher/get_sampled_images_for_annotation')
@@ -1762,7 +1824,8 @@ def api_get_sampled_images_for_annotation():
                 processed_sequences.append(processed_sequence)
 
             if processed_sequences:
-                all_students_sampled_images[student_number_from_report] = processed_sequences
+                all_students_sampled_images[str(student_number_from_report)] = processed_sequences
+                # all_students_sampled_images[student_number_from_report] = processed_sequences
 
     except Exception as e:
         import traceback

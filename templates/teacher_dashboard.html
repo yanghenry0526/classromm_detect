@@ -264,37 +264,157 @@
 <div id="comprehensiveReportTab" class="tab-content" style="display: none;">
         <h3>課堂綜合洞察報告</h3>
         <p>此報告整合了學生行為數據與教師課堂活動，提供宏觀的教學節奏分析與建議。</p>
-        
-        <!-- 宏觀總結區 -->
+
         <div id="reportOverallSummary" class="summary-card">
             <h4 id="summaryTitle">正在加載總結...</h4>
             <p id="summaryNarrative"></p>
-            <div id="summaryKeyTakeaways"></div>
+            <!-- 舊的 takeaways 容器已被移除，將由下面的新結構取代 -->
         </div>
 
-        <!-- 視覺化圖表區 -->
-        <div class="chart-container" id="focusChartContainer" style="display: none;"> <!-- 新增 ID 並預設隱藏 -->
-            <h4>課堂專注度節奏圖</h4>
-            <p>圖表顏色反應專注度等級 (綠:高, 黃:中, 紅:低)。將滑鼠懸浮在圖表上以查看該時段的關鍵教學事件。</p>
-            <div class="chart-wrapper"> <!-- 新增一個 wrapper 以便控制高度 -->
-                <canvas id="focusPercentageChart"></canvas> <!-- 給予新的 ID -->
+    <!-- ★★★ 全新結構開始 ★★★ -->
+    <div id="contentTimelineContainer" class="summary-card" style="display: none;">
+        
+        <!-- 1. 宏觀時間軸 (符合教授要求) -->
+        <div id="macroTimelineContainer">
+            <h4>課堂內容分佈時間軸 (宏觀)</h4>
+            <p>此圖表呈現了整堂課中，「正式課文內容」與「課外內容」的時間分佈情況。</p>
+            <div class="timeline-legend-v2">
+                <div class="legend-item-v2">
+                    <span class="legend-color-box-v2" style="background-color: #4A90E2;"></span>
+                    正式課文內容
+                </div>
+                <div class="legend-item-v2">
+                    <span class="legend-color-box-v2" style="background-color: #F5A623;"></span>
+                    課外內容
+                </div>
+            </div>
+            <div id="macroTimelineVisualizer">
+                <!-- 宏觀時間軸將由 JS 動態生成於此 -->
             </div>
         </div>
 
-        <!-- 逐段洞察區 -->
-        <div class="timeline-analysis-container">
-            <h4>逐段洞察與建議</h4>
-            <div id="timelineAnalysisCards">
-                <!-- AI分析卡片將由JS動態生成於此 -->
+        <hr class="section-divider"> <!-- 新增分隔線 -->
+
+        <!-- 2. 微觀時間軸 (您已完成的詳細版本) -->
+        <div id="microTimelineContainer">
+            <h4>教學模式細節時間軸 (微觀)</h4>
+            <p>將滑鼠懸浮在下方色塊上，可查看該時段的詳細教學模式、資訊與逐字稿。</p>
+            <div id="microTimelineLegendContainer" class="timeline-legend-v2">
+                <!-- 微觀圖例將由 JS 動態生成於此 -->
             </div>
+            <div id="microTimelineVisualizer">
+                <!-- 微觀時間軸將由 JS 動態生成於此 -->
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 新增：量化教學節奏分析容器 -->
+    <div id="pacingAnalysisContainer" class="summary-card" style="display: none;">
+        <h4>量化教學節奏分析</h4>
+        <div id="pacingAnalysisContent"></div>
+    </div>
+
+    <!-- 新增：關鍵教學模式識別容器 -->
+    <div id="patternIdentificationContainer" class="summary-card" style="display: none;">
+        <h4>關鍵教學模式識別</h4>
+        <div id="patternIdentificationContent" class="pattern-grid">
+            <!-- 模式卡片將由 JS 注入此處 -->
         </div>
     </div>
+
+    <!-- 新增：詞彙觸發點分析容器 -->
+    <div id="lexicalHighlightsContainer" class="summary-card" style="display: none;">
+        <h4>詞彙觸發點分析</h4>
+        <div id="lexicalHighlightsContent" class="lexical-grid">
+            <!-- 正負面詞彙將由 JS 注入此處 -->
+        </div>
+    </div>
+
+    <div id="keywordTimestampsContainer" class="summary-card" style="display: none;">
+        <h4>關鍵詞彙實例分析</h4>
+        <p>將滑鼠懸浮在時間點上，可查看老師說出關鍵詞彙時的完整上下文。</p>
+        <div id="keywordTimestampsContent" class="keyword-timeline-container">
+            <!-- 關鍵詞彙實例將由 JS 動態生成於此 -->
+        </div>
+    </div>
+
+
+    <!-- 新增：最終教學建議容器 -->
+    <div id="finalRecommendationsContainer" class="summary-card" style="display: none;">
+        <h4>數據驅動的教學建議</h4>
+        <div id="finalRecommendationsContent"></div>
+    </div>
+
+    <div id="quantitativeChartsContainer" class="charts-grid" style="display: none;">
+    <!-- 教學模式分佈圖 -->
+        <div class="chart-wrapper summary-card">
+            <h4>教學模式分佈</h4>
+            <p>整堂課中，「高強度講解」、「標準互動」等不同教學模式的時間佔比。</p>
+            <div class="chart-inner-wrapper">
+                <canvas id="teachingModeChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 教學循環甘特圖 -->
+        <div class="chart-wrapper summary-card">
+            <h4>教學循環分析</h4>
+            <p>以時間軸方式呈現「高強度講解 -> 認知緩衝 -> 互動練習」的循環週期。</p>
+            <div class="chart-inner-wrapper">
+                <canvas id="teachingCycleChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 語速趨勢圖 -->
+        <div class="chart-wrapper summary-card">
+            <h4>語速趨勢變化</h4>
+            <p>比較課堂上下半場的平均語速變化，並顯示線性回歸趨勢。</p>
+            <div class="chart-inner-wrapper">
+                <canvas id="speechRateChart"></canvas>
+            </div>
+            <!-- 用於顯示統計數據的容器 -->
+            <div id="speechRateStats" class="chart-stats-info"></div>
+        </div>
+    </div>
+
+
+    <!-- 視覺化圖表區 -->
+    <div class="chart-container" id="focusChartContainer" style="display: none;">
+        <h4>課堂專注度狀態分佈圖</h4>
+        <p>此圖表顯示了三種專注度狀態（任務導向、接收性、分心）隨時間的變化比例。將滑鼠懸浮在圖表上可查看詳細資訊。</p>
+        <div class="chart-wrapper">
+            <canvas id="focusPercentageChart"></canvas>
+        </div>
+    </div>
+
+    <!-- 逐段洞察區 -->
+    <div class="timeline-analysis-container">
+        <h4>逐段洞察與建議</h4>
+        <div id="timelineAnalysisCards">
+            <!-- AI分析卡片將由JS動態生成於此 -->
+        </div>
+    </div>
+    <div id="contentTimelineTooltip" class="custom-tooltip" style="display: none;">
+        <!-- Tooltip 內容將由 JavaScript 動態填入 -->
+    </div>
+    
+
+</div>
+
+<div id="keywordTooltip" class="keyword-tooltip" style="display: none;">
+        <!-- 內容將由 JavaScript 動態填入 -->
+</div>
+
+
 
 {% endblock %}
 
 {% block scripts %}
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+
     <script src="{{ url_for('static', filename='js/teacher_dashboard.js') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 {% endblock %}

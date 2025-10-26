@@ -7,6 +7,11 @@ let taggingSessionData = [];
 let focusChartInstance = null;
 
 let behaviorChartInstance = null;
+
+let teachingModeChartInstance = null;
+let teachingCycleChartInstance = null;
+let speechRateChartInstance = null;
+
 let taggedImageIdentifiers = new Set();
 const BATCH_SIZE = 50;
 
@@ -24,6 +29,19 @@ let currentFilter = 'all';     // 追蹤當前的篩選狀態, 預設為 'all'
 let historicalAnnotationData = {};
 
 let studentProgress = {}; // 用於追蹤每個學生的標註進度 { studentName: { tagged: 0, total: 100 } }
+
+const TEACHING_MODE_STYLES = {
+    "教師講解":   { class: 'mode-lecture',     color: '#4A90E2', label: '教師講解' },
+    "師生互動":   { class: 'mode-interaction',   color: '#50E3C2', label: '師生互動' },
+    "學生練習":   { class: 'mode-practice',      color: '#F5A623', label: '學生練習' },
+    "閒聊":       { class: 'mode-chat',          color: '#7ED321', label: '閒聊' },
+    "下課休息":   { class: 'mode-break',         color: '#BD10E0', label: '下課休息' },
+    "學生考試":   { class: 'mode-exam',          color: '#9013FE', label: '學生考試' },
+    "標準互動":   { class: 'mode-interaction', color: '#50E3C2', label: '標準互動' } // 將標準互動歸類到與師生互動相同的樣式
+};
+
+const FORMAL_MODES = ["教師講解", "師生互動", "學生練習", "標準互動"];
+const INFORMAL_MODES = ["閒聊", "下課休息", "學生考試"];
 
 const ALL_BEHAVIOR_CATEGORIES = [
     "主動舉手",
@@ -727,6 +745,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // --- API 呼叫：根據日期獲取學生摘要數據 ---
     function loadReportData() {
+        // 獲取選擇的日期，如果沒有選擇，則自動使用最新的日期
         let selectedDate = dateSelector.value;
         if (selectedDate === "" && dateSelector.options.length > 1) {
             selectedDate = dateSelector.options[1] ? dateSelector.options[1].value : dateSelector.options[0].value;
@@ -738,46 +757,50 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        // 定義所有需要一次性獲取的API端點
         const summaryApiUrl = `/api/teacher/all_students_activity_summary?date=${selectedDate}`;
         const behaviorApiUrl = `/api/teacher/behavior_summary_by_date?date=${selectedDate}`;
-        const comprehensiveApiUrl = `/api/teacher/get_comprehensive_report_by_date?date=${selectedDate}`;
+        const comprehensiveApiUrl = `/api/teacher/get_comprehensive_report_by_date?date=${selectedDate}`; // 【新增】綜合洞察報告的API路徑
         const samplingApiUrl = `/api/teacher/get_sampled_images_for_annotation?date=${selectedDate}`;
 
+        // 更新UI狀態，顯示載入訊息
         loadingMessage.style.display = 'block';
         loadingMessage.textContent = `正在查詢 ${selectedDate} 的報告數據...`;
         errorMessage.style.display = 'none';
         tabContents.forEach(tab => tab.style.display = 'none');
         document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
 
+        // 使用 Promise.all 並行發送所有請求，提升載入速度
         Promise.all([
             fetch(summaryApiUrl).then(res => res.ok ? res.json() : Promise.reject(new Error(`API Error: ${summaryApiUrl}`))),
             fetch(behaviorApiUrl).then(res => res.ok ? res.json() : Promise.reject(new Error(`API Error: ${behaviorApiUrl}`))),
-            fetch(comprehensiveApiUrl).then(res => res.ok ? res.json() : Promise.reject(new Error(`API Error: ${comprehensiveApiUrl}`))), // 新增
+            fetch(comprehensiveApiUrl).then(res => res.ok ? res.json() : Promise.reject(new Error(`API Error: ${comprehensiveApiUrl}`))), // 【修改】在陣列中加入新的 comprehensiveApiUrl
             fetch(samplingApiUrl).then(res => res.ok ? res.json() : Promise.reject(new Error(`API Error: ${samplingApiUrl}`)))
         ])
-        // 【【【 修改回調函數以接收新的 comprehensiveData 】】】
+        // 【修改】回調函數現在會接收第四個參數 comprehensiveData
         .then(([summaryData, behaviorData, comprehensiveData, sampledAndHistoryData]) => { 
-            // 檢查錯誤 (邏輯不變)
+            // 檢查每個API的回應是否有錯誤
             if (summaryData.error) throw new Error(summaryData.error);
             if (behaviorData.error) throw new Error(behaviorData.error);
             if (comprehensiveData.error) throw new Error(comprehensiveData.error);
             if (sampledAndHistoryData.error) throw new Error(sampledAndHistoryData.error);
             
-            // 處理抽樣數據 (邏輯不變)
+            // 處理抽樣與歷史標註數據
             const sampledData = sampledAndHistoryData.sampled_images;
             historicalAnnotationData = sampledAndHistoryData.historical_annotations;
             annotationData = sampledData; 
             
-            // 調用統一的渲染主函數，並傳入新的數據
+            // 調用統一的渲染主函數，並傳入所有獲取到的數據
             renderAllTabs(summaryData, behaviorData, comprehensiveData, sampledData);
 
+            // 隱藏載入訊息
             loadingMessage.style.display = 'none';
             
-            // 預設打開第一個頁籤 (邏輯不變)
+            // 預設打開第一個頁籤
             document.getElementById('webActivityTab').style.display = 'block';
             document.querySelector('.tab-button[onclick*="webActivityTab"]').classList.add('active');
         })
-        .catch(handleError);
+        .catch(handleError); // 統一處理任何發生的錯誤
     }
 
     // --- 統一的錯誤處理函數 ---
@@ -1706,140 +1729,434 @@ document.addEventListener('DOMContentLoaded', function() {
 // 將 openTeacherTab 設為全局可訪問，因為它是從 HTML 的 onclick 屬性中調用的
 window.openTeacherTab = openTeacherTab;
 
+/**
+ * 【全新 v3.0 整合版】渲染宏觀與微觀兩種教學時間軸
+ * @param {Array} detailedTimeline - 包含每30秒區間教學模式和語音的數據
+ */
+function renderContentTimeline(detailedTimeline, timelineAnalysis) {
+    const mainContainer = document.getElementById('contentTimelineContainer');
+    const tooltip = document.getElementById('contentTimelineTooltip');
+
+    if (!mainContainer || !tooltip || !detailedTimeline || !detailedTimeline.length) {
+        if (mainContainer) mainContainer.style.display = 'none';
+        return;
+    }
+    mainContainer.style.display = 'block';
+
+    // --- 輔助函數 ---
+    const formatSeconds = (totalSeconds) => {
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes} 分 ${seconds} 秒`;
+    };
+
+    const totalDuration = detailedTimeline.length * 30;
+
+    // --- 渲染 Part 1: 宏觀時間軸 (Formal vs. Informal) ---
+    const macroVisualizer = document.getElementById('macroTimelineVisualizer');
+    if (macroVisualizer) {
+        let macroSegments = [];
+        let currentMacroSegment = null;
+
+        detailedTimeline.forEach(interval => {
+            const mode = interval.teaching_mode || '未知狀態';
+            const contentType = FORMAL_MODES.includes(mode) ? '正式課文內容' : '課外內容';
+
+            if (!currentMacroSegment || currentMacroSegment.type !== contentType) {
+                if (currentMacroSegment) macroSegments.push(currentMacroSegment);
+                currentMacroSegment = { type: contentType, duration: 30 };
+            } else {
+                currentMacroSegment.duration += 30;
+            }
+        });
+        if (currentMacroSegment) macroSegments.push(currentMacroSegment);
+
+        let macroHtml = '<div class="content-timeline-bar">';
+        macroSegments.forEach(segment => {
+            const percentage = (segment.duration / totalDuration) * 100;
+            const typeClass = segment.type === '正式課文內容' ? 'formal-content' : 'informal-content';
+            macroHtml += `<div class="timeline-segment ${typeClass}" style="width: ${percentage}%;"></div>`;
+        });
+        macroHtml += '</div>';
+        macroVisualizer.innerHTML = macroHtml;
+    }
+
+
+    // --- 渲染 Part 2: 微觀時間軸 (多種教學模式) ---
+    const microLegendContainer = document.getElementById('microTimelineLegendContainer');
+    const microVisualizer = document.getElementById('microTimelineVisualizer');
+
+    if (microLegendContainer && microVisualizer) {
+        let microSegments = [];
+        let currentMicroSegment = null;
+
+        detailedTimeline.forEach(interval => {
+            const mode = interval.teaching_mode || '未知狀態';
+            if (!currentMicroSegment || currentMicroSegment.type !== mode) {
+                if (currentMicroSegment) microSegments.push(currentMicroSegment);
+                currentMicroSegment = {
+                    type: mode,
+                    startTime: interval.start_time,
+                    duration: 30,
+                    transcript: (interval.teacher_speech || '').trim()
+                };
+            } else {
+                currentMicroSegment.duration += 30;
+                const newSpeech = (interval.teacher_speech || '').trim();
+                if (newSpeech) currentMicroSegment.transcript += ` ${newSpeech}`;
+            }
+        });
+        if (currentMicroSegment) microSegments.push(currentMicroSegment);
+
+        // 渲染圖例
+        const uniqueModesInUse = new Set(microSegments.map(s => s.type));
+        let legendHtml = '';
+        uniqueModesInUse.forEach(mode => {
+            const styleInfo = TEACHING_MODE_STYLES[mode] || { color: '#BDBDBD', label: mode };
+            legendHtml += `<div class="legend-item-v2"><span class="legend-color-box-v2" style="background-color: ${styleInfo.color};"></span>${escapeHtmlJs(styleInfo.label)}</div>`;
+        });
+        microLegendContainer.innerHTML = legendHtml;
+
+        // 渲染時間軸
+        let timelineHtml = '<div class="content-timeline-bar">';
+        microSegments.forEach(segment => {
+            const percentage = (segment.duration / totalDuration) * 100;
+            const styleInfo = TEACHING_MODE_STYLES[segment.type] || { class: 'mode-unknown' };
+            timelineHtml += `<div class="timeline-segment ${styleInfo.class}" style="width: ${percentage}%;"
+                                  data-mode="${escapeHtmlJs(segment.type)}"
+                                  data-start="${escapeHtmlJs(segment.startTime)}"
+                                  data-duration="${segment.duration}"
+                                  data-transcript="${escapeHtmlJs(segment.transcript)}"></div>`;
+        });
+        timelineHtml += '</div>';
+        microVisualizer.innerHTML = timelineHtml;
+        
+        // --- 事件綁定 (只為微觀時間軸) ---
+        microVisualizer.addEventListener('mouseover', (event) => {
+            if (event.target.classList.contains('timeline-segment')) {
+                const segmentDiv = event.target;
+                const styleInfo = TEACHING_MODE_STYLES[segmentDiv.dataset.mode] || { color: '#BDBDBD', label: segmentDiv.dataset.mode };
+                const transcriptText = (segmentDiv.dataset.transcript || '無對話記錄');
+                const truncatedTranscript = transcriptText.length > 200 ? transcriptText.substring(0, 200) + '...' : transcriptText;
+
+                tooltip.innerHTML = `
+                    <div class="tooltip-title"><span class="color-box" style="background-color: ${styleInfo.color};"></span>${escapeHtmlJs(styleInfo.label)}</div>
+                    <div class="tooltip-body">
+                        <p><strong>開始時間:</strong> ${escapeHtmlJs(segmentDiv.dataset.start)}</p>
+                        <p><strong>持續時長:</strong> ${formatSeconds(parseInt(segmentDiv.dataset.duration))}</p>
+                    </div>
+                    <div class="tooltip-transcript"><strong>逐字稿摘要:</strong><br>${truncatedTranscript}</div>`;
+                tooltip.style.display = 'block';
+            }
+        });
+        microVisualizer.addEventListener('mousemove', (event) => {
+            tooltip.style.left = `${event.pageX + 15}px`;
+            tooltip.style.top = `${event.pageY + 15}px`;
+        });
+        microVisualizer.addEventListener('mouseout', () => {
+            tooltip.style.display = 'none';
+        });
+    }
+}
 
 function populateComprehensiveReportTab(data) {
-    // --- 步驟 1: 獲取所有需要的 DOM 元素 ---
-    const container = document.getElementById('comprehensiveReportTab');
+    // ★★★【修正 1：移除 console.log，保持程式碼乾淨】★★★
+    // console.log("--- 進入 populateComprehensiveReportTab ---");
+    // console.log("收到的完整報告數據 (data.report_data):", data.report_data);
+
+    // --- 步驟 1: 獲取所有需要的 DOM 元素 (不變) ---
     const summaryTitle = document.getElementById('summaryTitle');
     const summaryNarrative = document.getElementById('summaryNarrative');
-    const summaryKeyTakeaways = document.getElementById('summaryKeyTakeaways');
-    const timelineCardsContainer = document.getElementById('timelineAnalysisCards');
-    
-    // 獲取新的圖表相關元素
+    const pacingContainer = document.getElementById('pacingAnalysisContainer');
+    const pacingContent = document.getElementById('pacingAnalysisContent');
+    const patternContainer = document.getElementById('patternIdentificationContainer');
+    const patternContent = document.getElementById('patternIdentificationContent');
+    const lexicalContainer = document.getElementById('lexicalHighlightsContainer');
+    const lexicalContent = document.getElementById('lexicalHighlightsContent');
+    const keywordContainer = document.getElementById('keywordTimestampsContainer');
+    const keywordContent = document.getElementById('keywordTimestampsContent');
+    const recoContainer = document.getElementById('finalRecommendationsContainer');
+    const recoContent = document.getElementById('finalRecommendationsContent');
+    const quantitativeChartsContainer = document.getElementById('quantitativeChartsContainer');
     const chartContainer = document.getElementById('focusChartContainer');
     const chartCanvas = document.getElementById('focusPercentageChart');
+    const timelineCardsContainer = document.getElementById('timelineAnalysisCards');
+    
+    // ★★★【修正 2：從 allContainers 列表中移除 contentTimelineContainer】★★★
+    // 我們需要手動控制 contentTimelineContainer 的顯示與隱藏
+    const allContainers = [pacingContainer, patternContainer, lexicalContainer, recoContainer, chartContainer, quantitativeChartsContainer, keywordContainer];
+    allContainers.forEach(c => { if(c) c.style.display = 'none'; });
+    
+    // 手動處理時間軸容器
+    const contentTimelineContainer = document.getElementById('contentTimelineContainer');
+    if (contentTimelineContainer) contentTimelineContainer.style.display = 'none';
 
-    // --- 步驟 2: 在開始渲染前，清空所有舊內容並顯示載入狀態 ---
-    summaryTitle.textContent = '正在加載總結...';
-    summaryNarrative.textContent = '';
-    summaryKeyTakeaways.innerHTML = '';
-    timelineCardsContainer.innerHTML = '';
-    chartContainer.style.display = 'none'; // 先隱藏圖表容器
-    if (focusChartInstance) {
-        focusChartInstance.destroy();
-        focusChartInstance = null;
-    }
-
+    if (summaryTitle) summaryTitle.textContent = '正在加載總結...';
+    if (summaryNarrative) summaryNarrative.textContent = '';
+    if (timelineCardsContainer) timelineCardsContainer.innerHTML = '';
+    if (keywordContent) keywordContent.innerHTML = '';
+    
+    // 銷毀所有舊的圖表實例 (不變)
+    if (focusChartInstance) focusChartInstance.destroy();
+    if (teachingModeChartInstance) teachingModeChartInstance.destroy();
+    if (teachingCycleChartInstance) teachingCycleChartInstance.destroy();
+    if (speechRateChartInstance) speechRateChartInstance.destroy();
+    focusChartInstance = teachingModeChartInstance = teachingCycleChartInstance = speechRateChartInstance = null;
+    
     const reportData = data.report_data;
 
-    // --- 步驟 3: 處理無數據的情況 ---
-    if (!reportData || !reportData.timeline_analysis || reportData.timeline_analysis.length === 0) {
-        container.querySelector('h3').textContent = "課堂綜合洞察報告 (無數據)";
-        summaryTitle.textContent = "此日期暫無綜合報告可供分析。";
-        // 確保在無數據時，圖表相關的元素都清理乾淨
-        if (focusChartInstance) {
-            focusChartInstance.destroy();
-            focusChartInstance = null;
-        }
-        chartContainer.style.display = 'none';
-        return; // 提前結束函數
+    // --- 步驟 3: 處理無數據的情況 (不變) ---
+    if (!reportData) {
+        if (summaryTitle) summaryTitle.textContent = "此日期暫無綜合報告可供分析。";
+        return;
+    }
+
+    // --- ★★★【修正 3：確保傳遞了正確的數據給時間軸渲染函數】★★★ ---
+    // 這個調用位置和參數是正確的，保持不變
+    if (reportData.detailed_timeline && reportData.timeline_analysis) {
+        renderContentTimeline(reportData.detailed_timeline, reportData.timeline_analysis);
     }
     
-    // --- 步驟 4: 成功獲取報告數據，開始渲染 ---
-    
-    // 4a. 渲染宏觀總結區
+    // --- 步驟 4: 渲染頂部摘要與各個分析卡片 (不變) ---
+    // ... (此處省略了您所有渲染摘要、節奏、模式、建議的程式碼，它們是正確的) ...
     const overallSummary = reportData.overall_summary;
-    summaryTitle.textContent = `課堂總結 (${reportData.class_session_id})`;
-    summaryNarrative.textContent = overallSummary.class_narrative || "無敘事性總結。";
-    
-    let takeawaysHtml = '<h4>關鍵發現與建議</h4>';
-    if (overallSummary.key_findings && overallSummary.key_findings.length > 0) {
-        takeawaysHtml += '<h5>關鍵發現</h5><ul>';
-        overallSummary.key_findings.forEach(finding => {
-            takeawaysHtml += `<li>${escapeHtmlJs(finding)}</li>`;
-        });
-        takeawaysHtml += '</ul>';
-    }
-    if (overallSummary.teaching_suggestions && overallSummary.teaching_suggestions.length > 0) {
-        takeawaysHtml += '<h5>教學建議</h5><ul>';
-        overallSummary.teaching_suggestions.forEach(suggestion => {
-            takeawaysHtml += `<li>${escapeHtmlJs(suggestion)}</li>`;
-        });
-        takeawaysHtml += '</ul>';
-    }
-    summaryKeyTakeaways.innerHTML = takeawaysHtml;
-
-    // 4b. 渲染全新的專注度節奏圖
-    const timelineData = reportData.timeline_analysis;
-    if (chartCanvas && timelineData && timelineData.length > 0) {
-        chartContainer.style.display = 'block'; // 顯示圖表容器
-        renderFocusPercentageChart(chartCanvas, timelineData); // 調用新函數來渲染圖表
-    } else {
-        chartContainer.style.display = 'none'; // 如果沒有數據，則隱藏
+    if (summaryTitle) summaryTitle.textContent = `課堂總結 (${escapeHtmlJs(reportData.class_session_id)})`;
+    if (summaryNarrative && overallSummary) {
+        summaryNarrative.textContent = overallSummary.class_narrative || "無敘事性總結。";
     }
 
-    // 4c. 渲染逐段洞察卡片
-    timelineData.forEach(interval => {
-        const card = document.createElement('div');
-        card.className = 'timeline-card';
-        
-        const focusLevelClass = {
-            '高': 'focus-high',
-            '中': 'focus-medium',
-            '低': 'focus-low'
-        }[interval.student_focus_level] || 'focus-unknown';
-
-        // 處理 focus_trigger_analysis 欄位的 HTML 生成
-        let triggerHtml = '';
-        if (interval.focus_trigger_analysis) {
-            const posTrigger = interval.focus_trigger_analysis.positive_trigger;
-            const negTrigger = interval.focus_trigger_analysis.negative_trigger;
-
-            triggerHtml += '<div class="trigger-analysis-container">';
-            if (posTrigger && posTrigger.trigger_quote_or_event !== '無明顯觸發點') {
-                triggerHtml += `
-                    <div class="trigger-item positive-trigger">
-                        <span class="trigger-icon">🚀</span>
-                        <div>
-                            <p><strong>專注提升點:</strong> ${escapeHtmlJs(posTrigger.trigger_quote_or_event)}</p>
-                            <p><em>分析: ${escapeHtmlJs(posTrigger.analysis)}</em></p>
-                        </div>
-                    </div>
-                `;
-            }
-            if (negTrigger && negTrigger.trigger_quote_or_event !== '無明顯觸發點') {
-                triggerHtml += `
-                    <div class="trigger-item negative-trigger">
-                        <span class="trigger-icon">📉</span>
-                        <div>
-                            <p><strong>專注下降點:</strong> ${escapeHtmlJs(negTrigger.trigger_quote_or_event)}</p>
-                            <p><em>分析: ${escapeHtmlJs(negTrigger.analysis)}</em></p>
-                        </div>
-                    </div>
-                `;
-            }
-            triggerHtml += '</div>';
+    if (overallSummary) {
+        if (overallSummary.quantitative_pacing_analysis && pacingContainer && pacingContent) {
+            const pacing = overallSummary.quantitative_pacing_analysis;
+            pacingContent.innerHTML = `<ul><li><strong>整體節奏:</strong> ${escapeHtmlJs(pacing.overall_rhythm || 'N/A')}</li><li><strong>高負荷安全時長:</strong> ${escapeHtmlJs(pacing.avg_high_load_duration || 'N/A')}</li><li><strong>注意力重置模式:</strong> ${escapeHtmlJs(pacing.attention_reset_patterns || 'N/A')}</li></ul>`;
+            pacingContainer.style.display = 'block';
         }
+        if (overallSummary.key_pattern_identification && patternContainer && patternContent) {
+            const patterns = overallSummary.key_pattern_identification;
+            let boosterHtml = '<div class="pattern-column"><h5>🚀 專注度助推器模式</h5>';
+            if (patterns.focus_booster_patterns && patterns.focus_booster_patterns.length > 0) { patterns.focus_booster_patterns.forEach(p => { boosterHtml += `<div class="pattern-card booster"><h6>${escapeHtmlJs(p.pattern_name)}</h6><p>${escapeHtmlJs(p.description)}</p><div class="pattern-evidence"><strong>證據:</strong> ${escapeHtmlJs(p.evidence)}</div></div>`; }); } else { boosterHtml += '<p>本次未識別到顯著的助推器模式。</p>'; }
+            boosterHtml += '</div>';
+            let sinkHtml = '<div class="pattern-column"><h5>📉 專注度陷阱模式</h5>';
+            if (patterns.attention_sink_patterns && patterns.attention_sink_patterns.length > 0) { patterns.attention_sink_patterns.forEach(p => { sinkHtml += `<div class="pattern-card sink"><h6>${escapeHtmlJs(p.pattern_name)}</h6><p>${escapeHtmlJs(p.description)}</p><div class="pattern-evidence"><strong>證據:</strong> ${escapeHtmlJs(p.evidence)}</div></div>`; }); } else { sinkHtml += '<p>本次未識別到顯著的陷阱模式。</p>'; }
+            sinkHtml += '</div>';
+            patternContent.innerHTML = boosterHtml + sinkHtml;
+            patternContainer.style.display = 'block';
+        }
+        if (overallSummary.lexical_trigger_highlights && lexicalContainer && lexicalContent) {
+            const lexical = overallSummary.lexical_trigger_highlights;
+            lexicalContent.innerHTML = `<div class="lexical-card"><h5>短時間內提高專注詞彙類型</h5><p>${escapeHtmlJs(lexical.positive_trigger_words || '無')}</p></div><div class="lexical-card"><h5>分享時事、故事詞彙類型</h5><p>${escapeHtmlJs(lexical.negative_trigger_words || '無')}</p></div>`;
+            lexicalContainer.style.display = 'block';
+        }
+        if (overallSummary.final_recommendations && recoContainer && recoContent) {
+            let recoHtml = '<ul>';
+            overallSummary.final_recommendations.forEach(r => { recoHtml += `<li>${escapeHtmlJs(r)}</li>`; });
+            recoHtml += '</ul>';
+            recoContent.innerHTML = recoHtml;
+            recoContainer.style.display = 'block';
+        }
+    }
+    
+    // --- 步驟 5: 渲染關鍵詞彙實例區塊 (不變) ---
+    // ... (您渲染關鍵詞的程式碼是正確的) ...
+     if (reportData.keyword_timestamps && reportData.keyword_timestamps.length > 0 && keywordContainer && keywordContent) {
+        // 5a. 數據重組：將陣列轉換為以關鍵詞分組的物件
+        const groupedByKeyword = {};
+        reportData.keyword_timestamps.forEach(item => {
+            if (!groupedByKeyword[item.keyword]) {
+                groupedByKeyword[item.keyword] = [];
+            }
+            groupedByKeyword[item.keyword].push(item);
+        });
 
-        // 組合完整的卡片 HTML
-        card.innerHTML = `
-            <div class="card-header">
-                <h5>時間區段: ${escapeHtmlJs(interval.start_time)} - ${escapeHtmlJs(interval.end_time)}</h5>
-                <span class="focus-tag ${focusLevelClass}">${escapeHtmlJs(interval.student_focus_level)} (${interval.student_focus_percentage}%)</span>
-            </div>
-            <div class="card-body">
-                <p><strong>活動主題:</strong> ${escapeHtmlJs(interval.event_title || 'N/A')}</p>
-                <p><strong>教學內容:</strong> ${escapeHtmlJs(interval.event_description || 'N/A')}</p>
-                <div class="behavior-summary">
-                    <p><strong>🟢 專注行為:</strong> ${escapeHtmlJs(interval.key_student_behaviors.positive || '無')}</p>
-                    <p><strong>🔴 分心行為:</strong> ${escapeHtmlJs(interval.key_student_behaviors.negative || '無')}</p>
+        // 5b. 生成 HTML 結構
+        let keywordsHtml = '';
+        for (const keyword in groupedByKeyword) {
+            keywordsHtml += `<div class="keyword-group">`;
+            keywordsHtml += `  <h5 class="keyword-group-title">${escapeHtmlJs(keyword)}</h5>`;
+            keywordsHtml += `  <div class="timestamp-tags">`;
+            
+            groupedByKeyword[keyword].forEach(item => {
+                keywordsHtml += `<span class="timestamp-tag" 
+                                    data-context-before="${escapeHtmlJs(item.context_before)}" 
+                                    data-context-after="${escapeHtmlJs(item.context_after)}">
+                                    ${escapeHtmlJs(item.time)}
+                                 </span>`;
+            });
+
+            keywordsHtml += `  </div>`;
+            keywordsHtml += `</div>`;
+        }
+        keywordContent.innerHTML = keywordsHtml;
+        keywordContainer.style.display = 'block';
+
+        // 5c. 使用事件委派來處理懸浮事件
+        const tooltip = document.getElementById('keywordTooltip');
+        if (tooltip) {
+            keywordContent.addEventListener('mouseover', (event) => {
+                if (event.target.classList.contains('timestamp-tag')) {
+                    const tag = event.target;
+                    const before = tag.dataset.contextBefore;
+                    const after = tag.dataset.contextAfter;
+
+                    tooltip.innerHTML = `
+                        <div class="tooltip-context before">${before || '--- 無前文 ---'}</div>
+                        <div class="tooltip-context-divider">--- 關鍵詞時間點 ---</div>
+                        <div class="tooltip-context after">${after || '--- 無後文 ---'}</div>
+                    `;
+                    tooltip.style.left = `${event.pageX + 15}px`;
+                    tooltip.style.top = `${event.pageY + 15}px`;
+                    tooltip.style.display = 'block';
+                }
+            });
+
+            keywordContent.addEventListener('mouseout', (event) => {
+                if (event.target.classList.contains('timestamp-tag')) {
+                    tooltip.style.display = 'none';
+                }
+            });
+        }
+    }
+    
+    // --- 步驟 6 & 7: 渲染圖表 (不變) ---
+    // ... (您渲染圖表的程式碼是正確的) ...
+    const quantitativeSummary = reportData.quantitative_summary;
+    if (quantitativeSummary && quantitativeChartsContainer) {
+        quantitativeChartsContainer.style.display = 'grid';
+        if (quantitativeSummary.teaching_mode_distribution) { renderTeachingModeChart(quantitativeSummary.teaching_mode_distribution); }
+        if (quantitativeSummary.teaching_cycle_analysis) { renderTeachingCycleChart(quantitativeSummary.teaching_cycle_analysis); }
+        if (quantitativeSummary.speech_rate_trend_analysis) { renderSpeechRateChart(quantitativeSummary.speech_rate_trend_analysis); }
+    }
+    
+    if (reportData.timeline_analysis && reportData.micro_event_summary && chartCanvas && chartContainer) {
+        chartContainer.style.display = 'block';
+        renderFocusMultiStateChart(chartCanvas, reportData.timeline_analysis, reportData.micro_event_summary);
+    }
+    
+    // --- ★★★ 核心修改 4：確保在這裡為每張卡片添加 ID ★★★ ---
+    if (timelineCardsContainer && reportData.timeline_analysis) {
+        
+        const timeToSeconds = (timeStr) => {
+            if (!timeStr || typeof timeStr !== 'string') return null;
+            const parts = timeStr.split(':').map(Number);
+            if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+            if (parts.length === 2) return parts[0] * 60 + parts[1];
+            return null;
+        };
+        
+        timelineCardsContainer.innerHTML = ''; // 清空舊卡片
+
+        reportData.timeline_analysis.forEach(interval => {
+            const card = document.createElement('div');
+            card.className = 'timeline-card';
+            
+            // 【【【 在這裡為卡片賦予一個基於開始時間的唯一 ID 】】】
+            card.id = `card-for-chunk-${interval.start_time.replace(/:/g, '_')}`;
+
+            // ... (您後續生成卡片 innerHTML 的所有邏輯，完全保持不變) ...
+            const focusAnalysis = interval.student_focus_analysis || {};
+            const overallLevel = focusAnalysis.overall_level || '未知';
+            const avgDist = focusAnalysis.average_distribution || {};
+            const focusLevelClass = { '高': 'focus-high', '中高': 'focus-high', '中': 'focus-medium', '中偏高': 'focus-medium', '低': 'focus-low'}[overallLevel] || 'focus-unknown';
+
+            let pacingHtml = '';
+            if (interval.teaching_pacing_analysis) {
+                const pacing = interval.teaching_pacing_analysis;
+                pacingHtml = `<div class="pacing-analysis-section"><p><strong>教學節奏分析:</strong></p><div class="pacing-details"><span class="pacing-tag">認知負荷: ${escapeHtmlJs(pacing.cognitive_load_level || 'N/A')}</span><p>${escapeHtmlJs(pacing.analysis || '無分析')}</p></div></div>`;
+            }
+
+            let triggerHtml = '';
+            if (interval.focus_trigger_analysis) {
+                const posTrigger = interval.focus_trigger_analysis.positive_trigger;
+                const negTrigger = interval.focus_trigger_analysis.negative_trigger;
+                triggerHtml += '<div class="trigger-analysis-container">';
+                
+                if (posTrigger && posTrigger.trigger_snippet && posTrigger.trigger_snippet.key_quote) {
+                    const snippet = posTrigger.trigger_snippet;
+                    triggerHtml += `<div class="trigger-item positive-trigger"><span class="trigger-icon">🚀</span><div><p class="trigger-topic"><strong>提升點 (${escapeHtmlJs(snippet.topic || '')}):</strong></p><blockquote class="trigger-quote">${snippet.context_before ? `<span class="context-line">${escapeHtmlJs(snippet.context_before)}</span>` : ''}<strong class="key-line">${escapeHtmlJs(snippet.key_quote)}</strong>${snippet.context_after ? `<span class="context-line">${escapeHtmlJs(snippet.context_after)}</span>` : ''}</blockquote><p><em>分析: ${escapeHtmlJs(posTrigger.analysis)}</em></p></div></div>`;
+                }
+
+                if (negTrigger && negTrigger.trigger_snippet && negTrigger.trigger_snippet.key_quote) {
+                    const snippet = negTrigger.trigger_snippet;
+                    let impactHtml = ''; 
+                    const intervalStartSecs = timeToSeconds(interval.start_time);
+                    const intervalEndSecs = timeToSeconds(interval.end_time);
+                    let impactData = null;
+
+                    if (reportData.critical_segment_analysis && intervalStartSecs !== null && intervalEndSecs !== null) {
+                        const matchingSegment = reportData.critical_segment_analysis.find(segment => {
+                            const segmentStartSecs = timeToSeconds(segment.segment_start_time);
+                            return segmentStartSecs !== null &&
+                                   segmentStartSecs >= intervalStartSecs &&
+                                   segmentStartSecs < intervalEndSecs &&
+                                   segment.breaking_point_analysis && 
+                                   segment.breaking_point_analysis.quantitative_impact;
+                        });
+                        
+                        if (matchingSegment) {
+                            impactData = matchingSegment.breaking_point_analysis.quantitative_impact;
+                        }
+                    }
+
+                    if (impactData) {
+                        const delta = impactData.change_delta_pct;
+                        const isNegative = delta < 0;
+                        const icon = isNegative ? '🔽' : '🔼';
+                        const deltaClass = isNegative ? 'negative' : 'positive';
+                        impactHtml = `<div class="quantitative-impact-display"><strong>${icon} 數據影響分析:</strong><span>${escapeHtmlJs(impactData.focus_metric_analyzed)} 從 <strong>${impactData.value_before_decline_pct.toFixed(1)}%</strong> 變為 <strong>${impactData.value_after_decline_pct.toFixed(1)}%</strong></span><span class="impact-delta ${deltaClass}">(${delta > 0 ? '+' : ''}${delta.toFixed(1)}%)</span></div>`;
+                    }
+                    
+                    triggerHtml += `
+                        <div class="trigger-item negative-trigger">
+                            <span class="trigger-icon">📉</span>
+                            <div>
+                                <p class="trigger-topic"><strong>下降點 (${escapeHtmlJs(snippet.topic || '')}):</strong></p>
+                                <blockquote class="trigger-quote">
+                                    ${snippet.context_before ? `<span class="context-line">${escapeHtmlJs(snippet.context_before)}</span>` : ''}
+                                    <strong class="key-line">${escapeHtmlJs(snippet.key_quote)}</strong>
+                                    ${snippet.context_after ? `<span class="context-line">${escapeHtmlJs(snippet.context_after)}</span>` : ''}
+                                </blockquote>
+                                <p><em>分析: ${escapeHtmlJs(negTrigger.analysis)}</em></p>
+                                ${impactHtml} 
+                            </div>
+                        </div>`;
+                }
+                triggerHtml += '</div>';
+            }
+            
+            const rawTask = avgDist.task_oriented_focus || 0;
+            const rawReceptive = avgDist.receptive_engagement || 0;
+            const rawDisengaged = avgDist.disengagement || 0;
+            const total = rawTask + rawReceptive + rawDisengaged;
+            const normTask = total > 0 ? (rawTask / total) * 100 : 0;
+            const normReceptive = total > 0 ? (rawReceptive / total) * 100 : 0;
+            const normDisengaged = total > 0 ? (rawDisengaged / total) * 100 : 0;
+
+            card.innerHTML = `
+                <div class="card-header">
+                    <h5>時間區段: ${escapeHtmlJs(interval.start_time)} - ${escapeHtmlJs(interval.end_time)}</h5>
+                    <span class="focus-tag ${focusLevelClass}">整體專注度: ${escapeHtmlJs(overallLevel)}</span>
                 </div>
-                ${triggerHtml}
-                <p class="ai-insight"><strong>AI 洞察:</strong> ${escapeHtmlJs(interval.ai_insight || 'N/A')}</p>
-            </div>
-        `;
-        timelineCardsContainer.appendChild(card);
-    });
+                <div class="card-body">
+                    <p><strong>活動主題:</strong> ${escapeHtmlJs(interval.event_title || 'N/A')}</p>
+                    <p><strong>教學內容:</strong> ${escapeHtmlJs(interval.event_description || 'N/A')}</p>
+                    <div class="focus-distribution-bar">
+                        <div class="bar-segment task-focus" style="width: ${normTask.toFixed(2)}%;" title="任務導向專注: ${normTask.toFixed(1)}%"></div>
+                        <div class="bar-segment receptive-focus" style="width: ${normReceptive.toFixed(2)}%;" title="接收性專注: ${normReceptive.toFixed(1)}%"></div>
+                        <div class="bar-segment disengaged" style="width: ${normDisengaged.toFixed(2)}%;" title="分心: ${normDisengaged.toFixed(1)}%"></div>
+                    </div>
+                    <div class="distribution-legend">
+                        <span class="legend-item task-focus">任務導向 (${normTask.toFixed(1)}%)</span>
+                        <span class="legend-item receptive-focus">接收性 (${normReceptive.toFixed(1)}%)</span>
+                        <span class="legend-item disengaged">分心 (${normDisengaged.toFixed(1)}%)</span>
+                    </div>
+                    ${pacingHtml}
+                    ${triggerHtml}
+                    <p class="ai-insight"><strong>AI 洞察:</strong> ${escapeHtmlJs(interval.ai_insight || 'N/A')}</p>
+                </div>
+            `;
+            timelineCardsContainer.appendChild(card);
+        });
+    }
 }
 
 // 【新增】渲染趨勢圖的函數
@@ -2107,123 +2424,347 @@ function renderKnowledgeHubForStudent(hubData, container, reportDate) {
     }
 }
 
-function renderFocusPercentageChart(canvas, timelineData) {
+// 【【【 全新 v5.3 增強版 Tooltip 功能 】】】
+function renderFocusMultiStateChart(canvas, detailedTimelineData, microEvents) {
     if (focusChartInstance) {
-        focusChartInstance.destroy(); // 銷毀舊圖表以避免重疊
+        focusChartInstance.destroy();
     }
 
-    // 1. 從報告數據中提取圖表需要的標籤和數據
-    const labels = timelineData.map(d => `${d.start_time} - ${d.end_time}`);
-    const percentages = timelineData.map(d => d.student_focus_percentage);
-    const focusLevels = timelineData.map(d => d.student_focus_level);
+    // --- 數據準備與正規化 (這部分邏輯不變) ---
+    const labels = detailedTimelineData.map(d => d.start_time);
+    const normalizedTaskData = [];
+    const normalizedReceptiveData = [];
+    const normalizedDisengagementData = [];
 
-    // 2. 定義專注度等級對應的顏色
-    const levelColors = {
-        '高': 'rgba(75, 192, 192, 0.7)',  // 綠色
-        '中': 'rgba(255, 205, 86, 0.7)', // 黃色
-        '低': 'rgba(255, 99, 132, 0.7)'  // 紅色
-    };
-    const levelBorderColors = {
-        '高': 'rgba(75, 192, 192, 1)',
-        '中': 'rgba(255, 205, 86, 1)',
-        '低': 'rgba(255, 99, 132, 1)'
-    };
-
-    // 3. 【特別之處 1：漸層色彩】創建一個腳本化的背景色
-    const chartArea = canvas.getContext('2d');
-    const gradient = chartArea.createLinearGradient(0, 0, 0, 400);
-    // 根據數據點的專注度等級，在漸層中添加顏色停靠點
-    timelineData.forEach((data, index) => {
-        const color = levelColors[data.student_focus_level] || 'rgba(201, 203, 207, 0.7)'; // 預設灰色
-        gradient.addColorStop(index / (timelineData.length - 1 || 1), color);
+    detailedTimelineData.forEach(d => {
+        const rawTask = d.student_focus_analysis?.average_distribution?.task_oriented_focus || 0;
+        const rawReceptive = d.student_focus_analysis?.average_distribution?.receptive_engagement || 0;
+        const rawDisengaged = d.student_focus_analysis?.average_distribution?.disengagement || 0;
+        const total = rawTask + rawReceptive + rawDisengaged;
+        if (total === 0) {
+            normalizedTaskData.push(0);
+            normalizedReceptiveData.push(0);
+            normalizedDisengagementData.push(0);
+        } else {
+            normalizedTaskData.push((rawTask / total) * 100);
+            normalizedReceptiveData.push((rawReceptive / total) * 100);
+            normalizedDisengagementData.push((rawDisengaged / total) * 100);
+        }
     });
 
     const data = {
         labels: labels,
-        datasets: [{
-            label: '學生專注度 (%)',
-            data: percentages,
-            fill: true, // 啟用區域填充
-            backgroundColor: gradient, // ★ 使用我們創建的漸層
-            borderColor: function(context) {
-                const index = context.dataIndex;
-                if (index === undefined || index >= focusLevels.length) return '#ccc';
-                return levelBorderColors[focusLevels[index]] || '#ccc';
+        datasets: [
+            {
+                label: '任務導向專注',
+                data: normalizedTaskData,
+                backgroundColor: 'rgba(75, 192, 192, 0.7)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                fill: true,
+                tension: 0.2, 
+                pointRadius: 0
             },
-            pointBackgroundColor: function(context) {
-                 const index = context.dataIndex;
-                 if (index === undefined || index >= focusLevels.length) return '#ccc';
-                 return levelBorderColors[focusLevels[index]] || '#ccc';
+            {
+                label: '接收性專注',
+                data: normalizedReceptiveData,
+                backgroundColor: 'rgba(255, 159, 64, 0.7)',
+                borderColor: 'rgba(255, 159, 64, 1)',
+                fill: true,
+                tension: 0.2,
+                pointRadius: 0
             },
-            tension: 0.4, // 讓線條更平滑
-            pointRadius: 5,
-            pointHoverRadius: 8
-        }]
+            {
+                label: '分心狀態',
+                data: normalizedDisengagementData,
+                backgroundColor: 'rgba(255, 99, 132, 0.7)',
+                borderColor: 'rgba(255, 99, 132, 1)',
+                fill: true,
+                tension: 0.2,
+                pointRadius: 0
+            }
+        ]
     };
 
-    // 4. 【特別之處 2：互動式提示】自訂 Tooltip 內容
     const options = {
         responsive: true,
         maintainAspectRatio: false,
-        scales: {
-            y: {
-                beginAtZero: true,
-                max: 100,
-                title: {
-                    display: true,
-                    text: '專注度百分比 (%)'
-                }
-            },
-            x: {
-                title: {
-                    display: true,
-                    text: '課堂時間區段'
-                }
-            }
-        },
         plugins: {
+            title: {
+                display: false, // 標題已在 HTML 中，這裡不重複顯示
+            },
+            // ★★★ 核心修正 1：明確地為此圖表禁用 datalabels 插件 ★★★
+            datalabels: {
+                display: false
+            },
             legend: {
-                display: false // 只有一條線，可以隱藏圖例
+                position: 'top',
+                align: 'start' // 讓圖例靠左對齊，更美觀
             },
             tooltip: {
-                // 啟用豐富的 tooltip 回調
+                mode: 'index',
+                intersect: false,
                 callbacks: {
-                    title: function(tooltipItems) {
-                        const index = tooltipItems[0].dataIndex;
-                        const timeline = timelineData[index];
-                        return `時間: ${timeline.start_time} - ${timeline.end_time}`;
-                    },
+                    title: (tooltipItems) => `時間區段: ${tooltipItems[0].label}`,
                     label: function(context) {
-                        const percentage = context.parsed.y;
-                        return `平均專注度: ${percentage}%`;
+                         const label = context.dataset.label || '';
+                         // ★★★ 核心修正 2：確保 tooltip 中的數字也格式化為一位小數 ★★★
+                         const value = parseFloat(context.raw).toFixed(1);
+                         return ` ${label}: ${value}%`;
                     },
                     afterBody: function(tooltipItems) {
-                        const index = tooltipItems[0].dataIndex;
-                        const timeline = timelineData[index];
-                        let insightText = [`\n主題: ${timeline.event_title}`];
-                        
-                        const posTrigger = timeline.focus_trigger_analysis?.positive_trigger;
-                        const negTrigger = timeline.focus_trigger_analysis?.negative_trigger;
-
-                        if (posTrigger && posTrigger.trigger_quote_or_event !== '無明顯觸發點') {
-                            insightText.push(`\n🚀 專注提升點:`);
-                            insightText.push(`   "${posTrigger.trigger_quote_or_event}"`);
-                        }
-                        if (negTrigger && negTrigger.trigger_quote_or_event !== '無明顯觸發點') {
-                             insightText.push(`\n📉 專注下降點:`);
-                             insightText.push(`   "${negTrigger.trigger_quote_or_event}"`);
-                        }
-                        return insightText;
+                         const timeLabel = tooltipItems[0].label;
+                         const microEvent = microEvents.find(e => e.time === timeLabel);
+                         let details = [];
+                         if (microEvent) {
+                             details.push('');
+                             let icon = '🔹';
+                             if (microEvent.type.includes("高峰")) icon = '⭐';
+                             if (microEvent.type.includes("低谷")) icon = '❗';
+                             if (microEvent.type.includes("拉升")) icon = '🔼';
+                             if (microEvent.type.includes("下跌")) icon = '🔽';
+                             details.push(`${icon} [事件] ${microEvent.details}`);
+                         }
+                         if (microEvent && microEvent.teacher_speech_context) {
+                            details.push('');
+                            const speech = microEvent.teacher_speech_context.length > 60 
+                                ? microEvent.teacher_speech_context.substring(0, 60) + '...' 
+                                : microEvent.teacher_speech_context;
+                            details.push(`🗣️ 老師話語: "${speech}"`);
+                         }
+                         return details;
                     }
                 }
             }
-        }
+        },
+        scales: {
+            x: { 
+                title: { display: true, text: '課堂時間' }
+            },
+            y: { 
+                stacked: true, 
+                title: { display: true, text: '學生狀態比例 (%)' },
+                min: 0,
+                max: 100 
+            }
+        },
+        interaction: { mode: 'index', intersect: false }
     };
 
-    // 5. 創建新的圖表實例
     focusChartInstance = new Chart(canvas, {
         type: 'line',
         data: data,
         options: options
     });
+}
+
+// --- 【【【 新增的圖表渲染函數 】】】 ---
+
+/**
+ * 渲染教學模式分佈圓餅圖
+ * @param {object} distributionData - 從 JSON 的 teaching_mode_distribution 來的數據
+ */
+function renderTeachingModeChart(distributionData) {
+    const canvas = document.getElementById('teachingModeChart');
+    if (!canvas) return;
+
+    const labels = Object.keys(distributionData);
+    const data = Object.values(distributionData).map(item => item.percentage_of_class);
+    
+    // 註冊我們在 HTML 中引入的 datalabels 插件
+    Chart.register(ChartDataLabels);
+
+    teachingModeChartInstance = new Chart(canvas, {
+        type: 'pie',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.7)',
+                    'rgba(54, 162, 235, 0.7)',
+                    'rgba(255, 206, 86, 0.7)',
+                    'rgba(75, 192, 192, 0.7)',
+                    'rgba(153, 102, 255, 0.7)',
+                ],
+                borderColor: '#fff',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top' },
+                title: { display: false },
+                // 設定 datalabels 插件
+                datalabels: {
+                    formatter: (value, ctx) => {
+                        // 當百分比小於 5% 時不顯示，避免擁擠
+                        if (value < 5) return null;
+                        return value.toFixed(1) + '%';
+                    },
+                    color: '#fff',
+                    font: {
+                        weight: 'bold',
+                        size: 14,
+                    },
+                    textStrokeColor: '#333',
+                    textStrokeWidth: 2
+                }
+            }
+        }
+    });
+}
+
+/**
+ * 渲染教學循環甘特圖 (使用水平長條圖模擬)
+ * @param {object} cycleData - 從 JSON 的 teaching_cycle_analysis 來的數據
+ */
+function renderTeachingCycleChart(cycleData) {
+    const canvas = document.getElementById('teachingCycleChart');
+    if (!canvas || !cycleData.cycles || cycleData.cycles.length === 0) return;
+
+    // 輔助函數：將 "H:MM:SS" 格式的時間轉為總秒數 (不變)
+    const timeToSeconds = (timeStr) => {
+        const parts = timeStr.split(':').map(Number);
+        if (parts.length === 3) {
+            return parts[0] * 3600 + parts[1] * 60 + parts[2];
+        } else if (parts.length === 2) {
+            return parts[0] * 60 + parts[1];
+        }
+        return 0;
+    };
+
+    const labels = cycleData.cycles.map(c => `循環 ${c.cycle_index}`);
+    
+    // ★★★ 核心修正 1：為不同的教學模式定義顏色和標籤 ★★★
+    const datasets = [{
+        label: '高強度講解',
+        data: cycleData.cycles.map(c => [timeToSeconds(c.start_time), timeToSeconds(c.start_time) + c.high_intensity_duration]),
+        backgroundColor: 'rgba(255, 99, 132, 0.7)',
+        borderColor: 'rgba(255, 99, 132, 1)',
+        borderWidth: 1,
+        borderSkipped: false
+    }, {
+        label: '標準互動/緩衝',
+        data: cycleData.cycles.map(c => [timeToSeconds(c.start_time) + c.high_intensity_duration, timeToSeconds(c.end_time)]),
+        backgroundColor: 'rgba(54, 162, 235, 0.7)',
+        borderColor: 'rgba(54, 162, 235, 1)',
+        borderWidth: 1,
+        borderSkipped: false
+    }];
+
+    // 銷毀舊圖表實例
+    if (teachingCycleChartInstance) {
+        teachingCycleChartInstance.destroy();
+    }
+
+    teachingCycleChartInstance = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: datasets
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top' },
+                title: { display: false },
+                datalabels: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const start = context.raw[0];
+                            const end = context.raw[1];
+                            const duration = end - start;
+                            const minutes = Math.floor(duration / 60);
+                            const seconds = duration % 60;
+                            return `${context.dataset.label}: ${minutes}分 ${seconds}秒`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: '課堂時間 (時:分:秒)' // 修改標題文字
+                    },
+                    // ★★★ 核心修正 2：優化 X 軸刻度顯示 ★★★
+                    ticks: {
+                        // 讓 Chart.js 自動計算最佳刻度數量，避免重疊
+                        autoSkip: true,
+                        maxTicksLimit: 8, // 最多顯示 8 個主要刻度
+                        // 將 X 軸的刻度標籤格式化為 HH:MM:SS
+                        callback: function(value) {
+                            // 將秒數轉換回 HH:MM:SS 格式
+                            return new Date(value * 1000).toISOString().substr(11, 8);
+                        }
+                    }
+                },
+                y: {
+                    stacked: true
+                }
+            }
+        }
+    });
+}
+
+
+/**
+ * 渲染語速趨勢長條圖及統計數據
+ * @param {object} trendData - 從 JSON 的 speech_rate_trend_analysis 來的數據
+ */
+function renderSpeechRateChart(trendData) {
+    const canvas = document.getElementById('speechRateChart');
+    const statsDiv = document.getElementById('speechRateStats');
+    if (!canvas || !statsDiv || !trendData.comparative_summary) return;
+
+    const comp = trendData.comparative_summary;
+    const labels = ['上半場平均語速', '下半場平均語速'];
+    const data = [comp.average_wpm_first_half, comp.average_wpm_second_half];
+
+    speechRateChartInstance = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '平均每分鐘字數 (wpm)',
+                data: data,
+                backgroundColor: ['rgba(255, 159, 64, 0.7)', 'rgba(75, 192, 192, 0.7)'],
+                borderColor: ['rgba(255, 159, 64, 1)', 'rgba(75, 192, 192, 1)'],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }, // 只有一個數據集，不用圖例
+                title: { display: false }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: '每分鐘字數 (wpm)'
+                    }
+                }
+            }
+        }
+    });
+
+    // 填充統計數據
+    const stats = trendData.linear_regression_stats;
+    statsDiv.innerHTML = `
+        <p><strong>整體趨勢:</strong> ${escapeHtmlJs(trendData.trend_description || 'N/A')}</p>
+        <p><strong>變化率:</strong> ${escapeHtmlJs(comp.change_percentage.toFixed(2))}%</p>
+        <p><strong>線性回歸斜率:</strong> ${escapeHtmlJs(stats.slope_per_minute.toFixed(2))} wpm/分鐘</p>
+        <p><strong>R² (決定係數):</strong> ${escapeHtmlJs(stats.r_squared.toFixed(4))}</p>
+    `;
 }

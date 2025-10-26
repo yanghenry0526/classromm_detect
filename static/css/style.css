@@ -2644,3 +2644,661 @@ option:hover {
     height: 400px; /* 或者您覺得合適的高度 */
     width: 100%;
 }
+
+/* 新增 v5.3 報告樣式 */
+.pattern-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* 左右兩欄佈局 */
+    gap: 20px;
+}
+
+.pattern-column h5 {
+    text-align: center;
+    margin-bottom: 15px;
+    font-size: 1.1em;
+    color: #333;
+}
+
+.pattern-card {
+    background-color: #f9f9f9;
+    border-left: 5px solid;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 15px;
+}
+
+.pattern-card.booster {
+    border-color: #28a745; /* 綠色，代表助推器 */
+}
+
+.pattern-card.sink {
+    border-color: #dc3545; /* 紅色，代表陷阱 */
+}
+
+.pattern-card h6 {
+    margin-top: 0;
+    font-size: 1.05em;
+}
+
+.pattern-evidence {
+    font-size: 0.9em;
+    color: #555;
+    background-color: #ececec;
+    padding: 10px;
+    border-radius: 4px;
+    margin-top: 10px;
+    border-left: 3px solid #ccc;
+}
+
+.lexical-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.lexical-card {
+    padding: 15px;
+}
+
+.lexical-card h5 {
+    margin-top: 0;
+}
+
+#pacingAnalysisContent ul,
+#finalRecommendationsContent ul {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+#pacingAnalysisContent li,
+#finalRecommendationsContent li {
+    background-color: #f1f1f1;
+    padding: 12px;
+    margin-bottom: 8px;
+    border-radius: 4px;
+    position: relative;
+    padding-left: 30px;
+}
+
+#pacingAnalysisContent li::before,
+#finalRecommendationsContent li::before {
+    position: absolute;
+    left: 10px;
+    top: 14px;
+    font-weight: bold;
+}
+
+#pacingAnalysisContent li::before {
+    content: '⏱️';
+}
+
+#finalRecommendationsContent li::before {
+    content: '💡';
+}
+
+/* --- 課堂綜合洞察報告頁籤的專屬樣式 --- */
+
+/* 卡片基礎樣式 */
+.summary-card {
+    background-color: #f9f9f9;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 15px 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.summary-card h4 {
+    margin-top: 0;
+    color: #333;
+    border-bottom: 2px solid #007bff;
+    padding-bottom: 8px;
+    margin-bottom: 15px;
+}
+
+/* 關鍵教學模式的網格佈局 */
+.pattern-grid, .lexical-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.pattern-column, .lexical-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.pattern-card {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 15px;
+}
+
+.pattern-card h6 {
+    margin: 0 0 8px 0;
+    font-size: 1.1em;
+}
+.pattern-card p {
+    margin: 0 0 10px 0;
+    font-size: 0.95em;
+    line-height: 1.5;
+}
+.pattern-card.booster { border-left: 4px solid #28a745; }
+.pattern-card.sink { border-left: 4px solid #dc3545; }
+
+.pattern-evidence {
+    font-size: 0.85em;
+    color: #555;
+    background-color: #f0f0f0;
+    padding: 8px;
+    border-radius: 4px;
+    margin-top: auto; /* 將證據推到底部 */
+}
+
+/* 詞彙觸發點卡片 */
+.lexical-card h5 {
+    font-size: 1.1em;
+    margin: 0 0 10px 0;
+}
+.lexical-card p {
+    font-size: 0.9em;
+    line-height: 1.6;
+    background: #e9ecef;
+    padding: 10px;
+    border-radius: 5px;
+}
+
+/* 教學建議列表 */
+#finalRecommendationsContent ul {
+    list-style-type: '✔ ';
+    padding-left: 20px;
+}
+#finalRecommendationsContent li {
+    margin-bottom: 10px;
+    line-height: 1.6;
+}
+
+
+/* --- 逐段洞察卡片樣式 --- */
+.timeline-analysis-container h4 {
+    margin-bottom: 15px;
+}
+.timeline-card {
+    background-color: #ffffff;
+    border: 1px solid #d1d1d1;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    overflow: hidden; /* 確保子元素不會溢出圓角 */
+}
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #f1f3f5;
+    padding: 12px 18px;
+    border-bottom: 1px solid #d1d1d1;
+}
+.card-header h5 {
+    margin: 0;
+    font-size: 1.2em;
+}
+.card-body {
+    padding: 18px;
+}
+.card-body p {
+    margin: 0 0 12px 0;
+}
+.ai-insight {
+    margin-top: 15px !important;
+    padding: 12px;
+    background-color: #e3f2fd;
+    border-left: 4px solid #2196f3;
+    border-radius: 4px;
+    font-style: italic;
+}
+
+/* 專注度標籤 */
+.focus-tag {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    font-weight: bold;
+    color: white;
+}
+.focus-high { background-color: #28a745; }
+.focus-medium { background-color: #ffc107; color: #333; }
+.focus-low { background-color: #dc3545; }
+.focus-unknown { background-color: #6c757d; }
+
+/* 專注度分佈長條圖 */
+.focus-distribution-bar {
+    display: flex;
+    height: 20px;
+    border-radius: 5px;
+    overflow: hidden;
+    margin: 15px 0 8px 0;
+}
+.bar-segment { transition: width 0.5s ease-in-out; }
+.bar-segment.task-focus { background-color: rgba(75, 192, 192, 0.8); }
+.bar-segment.receptive-focus { background-color: rgba(255, 159, 64, 0.8); }
+.bar-segment.disengaged { background-color: rgba(255, 99, 132, 0.8); }
+
+.distribution-legend {
+    display: flex;
+    gap: 15px;
+    font-size: 0.8em;
+}
+.legend-item::before {
+    content: '';
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 5px;
+}
+.legend-item.task-focus::before { background-color: rgba(75, 192, 192, 0.8); }
+.legend-item.receptive-focus::before { background-color: rgba(255, 159, 64, 0.8); }
+.legend-item.disengaged::before { background-color: rgba(255, 99, 132, 0.8); }
+
+/* 教學節奏與觸發點分析區塊 */
+.pacing-analysis-section { margin-top: 15px; }
+.pacing-details {
+    background: #f8f9fa;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #eee;
+}
+.pacing-tag {
+    display: inline-block;
+    background-color: #6c757d;
+    color: white;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 0.8em;
+    margin-bottom: 8px;
+}
+.trigger-analysis-container { margin-top: 15px; display: flex; flex-direction: column; gap: 15px; }
+.trigger-item {
+    display: flex;
+    gap: 15px;
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+}
+.trigger-item.positive-trigger { background-color: #f0fff4; border-left: 4px solid #28a745; }
+.trigger-item.negative-trigger { background-color: #fff5f5; border-left: 4px solid #dc3545; }
+
+.trigger-icon { font-size: 1.5em; }
+.trigger-topic { margin: 0 0 8px 0; }
+.trigger-quote {
+    font-family: monospace;
+    font-size: 0.9em;
+    background: #eee;
+    padding: 10px;
+    border-radius: 4px;
+    margin: 0 0 8px 0;
+}
+.trigger-quote .context-line {
+    display: block;
+    color: #666;
+    font-size: 0.9em;
+}
+.trigger-quote .key-line {
+    display: block;
+    background-color: #fffb8f;
+    padding: 2px 0;
+}
+
+.charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-top: 20px;
+    margin-bottom: 40px;
+
+    /* overflow: hidden; 仍然有其作用，請保留它 */
+    overflow: hidden;
+}
+
+.charts-grid .chart-wrapper:nth-child(3) {
+    /* 讓這個元素從第一欄開始，跨越到最後一欄 (-1) */
+    grid-column: 1 / -1; 
+}
+
+.chart-wrapper.summary-card {
+    /* display: flex;
+    flex-direction: column; */
+    min-width: 0;
+}
+
+.chart-wrapper.summary-card p {
+    font-size: 0.9em;
+    color: #555;
+    margin-bottom: 15px;
+}
+
+.chart-inner-wrapper {
+    /* flex-grow: 1;  */
+    position: relative; 
+    width: 100%;
+    height: 80%; /* 新增這一行，讓它能填滿父容器的高度 */
+    /* min-height: 100px; */
+    /* aspect-ratio: 2 / 1; */
+}
+
+/* 為第一個圖表 (圓餅圖) 設定 1:1 的長寬比，讓它成為正方形 */
+.charts-grid .chart-wrapper:nth-child(1) {
+    aspect-ratio: 1 / 1;
+}
+
+/* 為第二個圖表 (甘特圖) 設定 2:1 的長寬比，讓它寬一點 */
+.charts-grid .chart-wrapper:nth-child(2) {
+    aspect-ratio: 2.5 / 1;
+}
+
+.charts-grid .chart-wrapper:nth-child(3) {
+    /* [1] 告訴網格，這個元素的高度由它自己決定，不需要對齊上方 */
+    align-self: start;
+
+    /* [2] 設定一個你覺得合適的最大高度 */
+    max-height: 550px; /* 您可以調整這個數值，例如 350px 或 450px */
+
+    /* [3] 讓內部元素（標題、圖表、統計）能垂直排列 */
+    display: flex;
+    flex-direction: column;
+    height: 100%; /* 確保 flex 佈局生效 */
+}
+
+/* 同時，讓圖表容器自動填滿剩餘的垂直空間 */
+.charts-grid .chart-wrapper:nth-child(3) .chart-inner-wrapper {
+    flex-grow: 1;
+}
+
+
+/* 語速趨勢的額外統計信息樣式 (維持不變) */
+.chart-stats-info {
+    /* [1] 移除背景和邊框，讓它完全融入卡片 */
+    background-color: transparent;
+    border: none;
+    border-radius: 0;
+
+    /* [2] 調整與上方圖表的間距，看起來更和諧 */
+    margin-top: 20px;
+    padding: 0; /* 移除自身的內邊距，讓內部的 <p> 標籤自己控制間距 */
+
+    /* [3] (可選) 微調文字樣式，提升可讀性 */
+    font-size: 0.9em; /* 稍微放大字體 */
+    line-height: 1.7;
+}
+
+/* 我們也稍微調整一下內部的 p 標籤，讓排版更好看 */
+.chart-stats-info p {
+    margin: 0 0 8px 0; /* 增加一點行間的下邊距 */
+    color: #333;
+}
+.chart-stats-info strong {
+    color: #0056b3;
+    margin-right: 8px; /* 讓標題和內容之間有點空隙 */
+}
+
+.quantitative-impact-display {
+    background-color: #f8f9fa; /* 淡灰色背景 */
+    border-left: 4px solid #6c757d; /* 左側灰色邊框 */
+    padding: 10px 15px;
+    margin-top: 12px; /* 與上方分析文字的間距 */
+    border-radius: 0 4px 4px 0;
+    font-size: 0.9em;
+    color: #495057;
+}
+
+.quantitative-impact-display strong {
+    color: #343a40; /* 標題顏色加深 */
+}
+
+/* 用於顯示數據變化的 span 標籤 */
+.quantitative-impact-display .impact-delta {
+    font-weight: bold;
+    margin-left: 8px; /* 與前面文字的間距 */
+}
+
+/* 如果是負向變化，顯示紅色 */
+.quantitative-impact-display .impact-delta.negative {
+    color: #d9534f; /* Bootstrap's danger color */
+}
+
+/* 如果是正向變化 (未來可能用到)，顯示綠色 */
+.quantitative-impact-display .impact-delta.positive {
+    color: #5cb85c; /* Bootstrap's success color */
+}
+
+/* --- 關鍵詞彙實例分析區塊 (分組 + 懸浮提示版) --- */
+
+.keyword-group {
+    padding: 10px;
+    border-bottom: 1px solid #e9ecef;
+}
+.keyword-group:last-child {
+    border-bottom: none;
+}
+
+.keyword-group-title {
+    margin-bottom: 10px;
+    color: #495057;
+    font-size: 1.1em;
+}
+
+.timestamp-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px; /* 標籤之間的間距 */
+}
+
+.timestamp-tag {
+    background-color: #e9ecef;
+    color: #007bff;
+    padding: 5px 12px;
+    border-radius: 15px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9em;
+    font-weight: bold;
+    cursor: pointer; /* 提示使用者可以互動 */
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.timestamp-tag:hover {
+    background-color: #007bff;
+    color: #fff;
+}
+
+/* --- 懸浮提示窗 (Tooltip) 樣式 --- */
+.keyword-tooltip {
+    position: absolute; /* 關鍵！讓它可以自由浮動 */
+    z-index: 1001; /* 確保在最上層 */
+    background-color: #fff;
+    border: 1px solid #ddd;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border-radius: 8px;
+    padding: 15px;
+    max-width: 400px;
+    font-size: 0.9em;
+    pointer-events: none; /* 讓滑鼠可以穿透它，避免閃爍 */
+    transition: opacity 0.1s ease;
+}
+
+.tooltip-context {
+    color: #6c757d;
+    font-style: italic;
+    line-height: 1.5;
+}
+
+.tooltip-context.before {
+    margin-bottom: 8px;
+}
+
+.tooltip-context.after {
+    margin-top: 8px;
+}
+
+.tooltip-context-divider {
+    text-align: center;
+    font-size: 0.8em;
+    color: #adb5bd;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+/* --- 優化版：課堂內容分佈時間軸與互動樣式 v2.0 --- */
+
+#contentTimelineContainer {
+    margin-top: 20px;
+}
+
+/* 1. 新版圖例樣式 (取代舊的 .timeline-legend) */
+.timeline-legend-v2 {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px; /* 使用 gap 替代 margin */
+    margin-bottom: 15px;
+    padding-left: 5px;
+}
+
+.legend-item-v2 {
+    display: flex;
+    align-items: center;
+    font-size: 0.9em;
+}
+
+.legend-color-box-v2 {
+    width: 15px;
+    height: 15px;
+    margin-right: 8px;
+    border-radius: 3px;
+    border: 1px solid rgba(0,0,0,0.1);
+}
+
+/* 2. 時間軸本體樣式 (保留您的結構，優化 hover 效果) */
+.content-timeline-bar {
+    display: flex;
+    width: 100%;
+    height: 30px;
+    border-radius: 5px;
+    overflow: hidden;
+    background-color: #f0f0f0;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+    cursor: pointer; /* 提示使用者可以互動 */
+}
+
+.timeline-segment {
+    height: 100%;
+    transition: all 0.2s ease-in-out; /* 統一過渡效果 */
+}
+
+.timeline-segment:hover {
+    transform: scaleY(1.15); /* 稍微增強放大效果 */
+    filter: brightness(1.2); /* 增加亮度，比 box-shadow 性能更好 */
+    z-index: 10;
+}
+
+/* 3. 【核心】6 種教學模式顏色定義 (取代舊的 formal/informal-content) */
+.mode-lecture { background-color: #4A90E2; }     /* 教師講解 */
+.mode-interaction { background-color: #50E3C2; } /* 師生互動/標準互動 */
+.mode-practice { background-color: #F5A623; }    /* 學生練習 */
+.mode-chat { background-color: #7ED321; }        /* 閒聊 */
+.mode-break { background-color: #BD10E0; }       /* 下課休息 */
+.mode-exam { background-color: #9013FE; }        /* 學生考試 */
+.mode-unknown { background-color: #BDBDBD; }     /* 未知/其他 */
+
+
+/* 4. 全新 Tooltip 結構樣式 (取代舊的 .custom-tooltip 內部樣式) */
+.custom-tooltip {
+    position: absolute;
+    background-color: rgba(30, 30, 30, 0.95);
+    color: #fff;
+    border-radius: 8px;
+    padding: 12px 15px;
+    font-size: 0.9em;
+    z-index: 1000;
+    pointer-events: none;
+    max-width: 450px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    /* 保留您的淡入淡出效果 */
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+    display: none; /* JS 會控制 display */
+}
+
+/* 當 JS 設置為 block 時，觸發透明度動畫 */
+.custom-tooltip[style*="display: block"] {
+    opacity: 1;
+}
+
+.tooltip-title {
+    font-weight: bold;
+    font-size: 1.1em;
+    margin: 0 0 8px 0;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    padding-bottom: 6px;
+}
+
+.tooltip-title .color-box {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    margin-right: 8px;
+}
+
+.tooltip-body {
+    margin-top: 8px;
+}
+
+.tooltip-body p {
+    margin: 4px 0;
+    line-height: 1.5;
+}
+.tooltip-body strong {
+    color: #50E3C2; /* 使用新的青色作為強調色，更醒目 */
+}
+
+.tooltip-transcript {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.3);
+    font-style: italic;
+    color: #ccc;
+    max-height: 150px; /* 限制最大高度，超出部分可滾動 */
+    overflow-y: auto;
+    font-size: 0.85em;
+    line-height: 1.6;
+}
+
+/* 5. 保留您優秀的卡片高亮樣式 (無需修改) */
+.timeline-card.highlighted {
+    border: 3px solid #F5A623;
+    box-shadow: 0 0 20px rgba(245, 166, 35, 0.5);
+    transform: scale(1.02);
+    transition: all 0.3s ease-in-out;
+}
+
+/* 用於分隔兩個時間軸的分隔線 */
+.section-divider {
+    border: none;
+    border-top: 1px solid #e0e0e0;
+    margin: 25px 0;
+}
+
+/* 確保宏觀時間軸的色塊也有基礎樣式 */
+#macroTimelineVisualizer .content-timeline-bar .timeline-segment {
+    height: 100%;
+}
+#macroTimelineVisualizer .formal-content {
+    background-color: #4A90E2;
+}
+#macroTimelineVisualizer .informal-content {
+    background-color: #F5A623;
+}
