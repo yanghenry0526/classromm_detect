@@ -15,11 +15,12 @@
     <!-- ****** 標籤頁導航 ****** -->
     <div class="tab-navigation">
         <button class="tab-button active" onclick="openTeacherTab(event, 'webActivityTab')">網站活動摘要</button>
-        <button class="tab-button" onclick="openTeacherTab(event, 'behaviorStatsTab')">課堂行為統計</button>
+        <!-- <button class="tab-button" onclick="openTeacherTab(event, 'behaviorStatsTab')">課堂行為統計</button>
         <button class="tab-button" onclick="openTeacherTab(event, 'imageExplorerTab')">行為影像瀏覽</button>
         <button class="tab-button" onclick="openTeacherTab(event, 'crossStudentImageTab')">跨學生行為總覽</button>
-        <button class="tab-button" onclick="openTeacherTab(event, 'annotationWorkbenchTab')">校準工作台</button>
+        <button class="tab-button" onclick="openTeacherTab(event, 'annotationWorkbenchTab')">校準工作台</button> -->
         <button class="tab-button" onclick="openTeacherTab(event, 'comprehensiveReportTab')">課堂綜合洞察</button>
+        <button class="tab-button" onclick="openTeacherTab(event, 'workbookReviewTab')">練習題目校驗</button>
     </div>
 
     <!-- ****** 標籤頁內容 ****** -->
@@ -59,6 +60,21 @@
         <p>點擊學生姓名展開其行為列表，再點擊具體行為即可瀏覽對應的影像。</p>
         <div id="imageExplorerContainer">
             <!-- 學生行為影像瀏覽器將由JS動態生成於此 -->
+        </div>
+    </div>
+
+    <!-- 頁簽: 教材審核與發布 -->
+    <div id="workbookReviewTab" class="tab-content" style="display: none;">
+        <h3>教材審核與發布</h3>
+        <p>在此審核 AI 生成的練習題目。您可以直接編輯內容，確認無誤後點擊「儲存並發布」，學生端將立即更新。</p>
+        
+        <div id="workbookReviewContainer">
+            <p class="loading-text">請先選擇上方日期以載入教材...</p>
+        </div>
+
+        <div class="review-actions" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee; display:none;" id="reviewActionArea">
+            <button id="saveWorkbookBtn" class="button-primary">💾 儲存並發布給學生</button>
+            <span id="saveStatus" style="margin-left: 10px; color: green; display: none;"></span>
         </div>
     </div>
 </div>
@@ -380,10 +396,10 @@
 
     <!-- 視覺化圖表區 -->
     <div class="chart-container" id="focusChartContainer" style="display: none;">
-        <h4>課堂專注度狀態分佈圖</h4>
-        <p>此圖表顯示了三種專注度狀態（任務導向、接收性、分心）隨時間的變化比例。將滑鼠懸浮在圖表上可查看詳細資訊。</p>
-        <div class="chart-wrapper">
-            <canvas id="focusPercentageChart"></canvas>
+        <h4>課堂行為參與與狀態分佈圖</h4>
+        <p>此圖表顯示了四種行為狀態隨時間的變化比例。將滑鼠懸浮在圖表上可查看詳細資訊。</p>
+        <div class="chart-wrapper" style="min-height: 600px; height: 600px;">
+            <canvas id="focusPercentageChart"></canvas> <!-- 確保這裡是一個 canvas 元素 -->
         </div>
     </div>
 

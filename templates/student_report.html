@@ -14,7 +14,7 @@
 
     <div id="reportDisplayArea" style="display: none;">
         {# 報告元數據，放在標籤頁外部，因為它們適用於整個報告 #}
-        <div id="reportMetaDataHeader" style="text-align: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px;">
+        <!-- <div id="reportMetaDataHeader" style="text-align: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px;">
             <p>學生姓名: <span id="studentIdDisplay"></span></p>
             <p id="reportGenerationTime"><span class="report-time-label">報告生成時間 :</span> <span id="actualReportTime"></span></p>
         </div>
@@ -26,63 +26,73 @@
                 <li>共找到圖片數量: <span id="totalImagesFoundGlobal"></span></li>
                 <li>總分析圖片/批次: <span id="totalImagesAnalyzedGlobal"></span></li>
             </ul>
-        </section>
+        </section> -->
 
 
         {# ****** 標籤頁導航 ****** #}
         <div class="tab-navigation">
-            <button class="tab-button active" onclick="openTab(event, 'summaryNotesTab')">AI行為觀察</button>
+            <!-- <button class="tab-button active" onclick="openTab(event, 'summaryNotesTab')">AI行為觀察</button>
             <button class="tab-button" onclick="openTab(event, 'overallStatsTab')">行為統計</button>
-            <button class="tab-button" onclick="openTab(event, 'timelineTab')">行為趨勢</button>
+            <button class="tab-button" onclick="openTab(event, 'timelineTab')">行為趨勢</button> -->
+            <button class="tab-button active" onclick="openTab(event, 'behaviorOverviewTab')">行為觀察報告</button>
             <!-- 【新增】下面是新的頁簽按鈕 -->
-            <button class="tab-button" onclick="openTab(event, 'knowledgeHubTab')">AI課堂筆記</button>
-            <button class="tab-button active" onclick="openTab(event, 'workbookTab')">AI練習</button>
+            <button class="tab-button" onclick="openTab(event, 'knowledgeHubTab')">課堂智慧筆記</button>
+            <button class="tab-button" onclick="openTab(event, 'workbookTab')">自主學習測驗</button>
 
-            <button class="tab-button" onclick="openTab(event, 'sequenceDetailsTab')">詳細序列分析</button>
+            <!-- <button class="tab-button" onclick="openTab(event, 'sequenceDetailsTab')">詳細序列分析</button> -->
         </div>
 
-        {# ****** 標籤頁內容 ****** #}
-        <div id="summaryNotesTab" class="tab-content active-content">
+       <div id="behaviorOverviewTab" class="tab-content active-content">
+            
             <section id="summaryNotesSection">
-                <h3>AI 學習夥伴的觀察與建議</h3>
-                <p id="summaryGreeting"></p>
-                <p id="summaryPositiveFeedback"></p>
-                <p id="summaryObservationPoints"></p>
-                <p id="summaryDistractions"></p>
-                <p id="summarySuggestions"></p>
-                <p id="summaryEncouragement"></p>
-            </section>
-        </div>
+                <h3>AI 觀察與建議</h3>
 
-        <div id="overallStatsTab" class="tab-content">
+                <div id="analysisSummaryContainer">
+                    <h4>📝 課堂觀察</h4>
+                    <p id="analysisSummaryText"></p> 
+                </div>
+
+                <div id="actionPlanContainer">
+                    <h4>💡 給你的具體建議</h4>
+                    <div id="actionPlanList"></div> 
+                </div>
+
+                <!-- <div id="finalWordContainer">
+                    <h4>結語</h4>
+                    <p id="finalWordText"></p>
+                </div> -->
+            </section>
+
             <section id="overallBehaviorStatisticsSection">
-                <h3>整體行為統計</h3>
-                <div id="overallPieChartContainer" class="chart-placeholder-style" style="width: 100%;"></div>
-                <h4 style="margin-top: 20px; font-size: 1.1em;">詳細行為統計表:</h4>
+                <h3>學習狀態總覽</h3>
+                <div id="stackedBarChartContainer" class="chart-placeholder-style" style="width: 100%; height: 300px; margin-bottom: 20px;"></div>
+
+                <!-- <h4 style="margin-top: 20px; font-size: 1.1em;">分類統計表:</h4>
                 <div class="table-responsive-wrapper">
-                    <table id="overallBehaviorTable">
+                    <table id="summaryBehaviorTable">
                         <thead>
                             <tr>
-                                <th>行為類別</th>
-                                <!-- <th>次數</th> -->
-                                <th>百分比</th>
+                                <th>行為分類</th>
+                                <th>總計百分比</th>
                                 <th>平均可信度</th>
                             </tr>
                         </thead>
-                        <tbody id="overallBehaviorTableBody"></tbody>
+                        <tbody id="summaryBehaviorTableBody"></tbody>
                     </table>
                 </div>
-            </section>
-        </div>
 
-        <div id="timelineTab" class="tab-content">
-            <section id="behaviorTimelineSection">
-                <h3>行為隨時間變化趨勢</h3>
-                <div id="behaviorLineChartContainer" class="chart-placeholder-style" style="width: 100%;"></div>
+                <h4 style="margin-top: 30px; font-size: 1.1em;">詳細行為分佈:</h4>
+                <div id="detailedBehaviorAccordion">
+                </div> -->
             </section>
+
+            {# 3. 從舊的 timelineTab 移入的內容 #}
+            <!-- <section id="behaviorTimelineSection">
+                <h3 style="margin-top: 40px;">行為隨時間變化趨勢</h3> {# 建議加一點 margin-top 來分隔區塊 #}
+                <div id="behaviorLineChartContainer" class="chart-placeholder-style" style="width: 100%;"></div>
+            </section> -->
+
         </div>
-        
-        {# 如果還需要顯示原始的序列分析文本，可以將其放入一個標籤頁 #}
          
         <div id="sequenceDetailsTab" class="tab-content">
             <section id="imageBehaviorDetailsSection">
@@ -92,22 +102,62 @@
         </div>
         
         <div id="knowledgeHubTab" class="tab-content">
-            <h3>AI 智慧課堂筆記</h3>
-            <p>這是由 AI 分析老師的課堂講解與板書後，為你生成的個人化主題筆記，幫助你高效複習！</p>
-            
-            <div id="knowledgeHubContainer" class="knowledge-hub-container">
-                <!-- 筆記內容將由 JS 動態生成於此 -->
-                <div id="notesLoadingMessage" style="text-align:center; padding: 20px;">正在為您加載課堂筆記...</div>
+        
+        <!-- 1. 總覽區：課程圖書館 (預設顯示) -->
+        <div id="knowledgeLibraryView">
+            <div class="library-header">
+                <h3>📚 各堂課知識節點</h3>
+                
+                <!-- 【新增】全域搜尋框 -->
+                <div class="global-search-container">
+                    <input type="text" id="globalSearchInput" 
+                        placeholder="🔍 搜尋所有筆記知識節點 (例如: 情緒分詞、完成式)..." 
+                        autocomplete="off">
+                    <button id="clearSearchBtn" style="display:none;">✕</button>
+                </div>
+            </div>
+
+            <!-- 搜尋結果顯示區 (預設隱藏) -->
+            <div id="globalSearchResults" style="display: none;">
+                <p class="search-hint">找到 <span id="searchResultCount">0</span> 個相關知識節點：</p>
+                <div id="searchResultList" class="search-result-list">
+                    <!-- JS 會在這裡生成結果 -->
+                </div>
+            </div>
+
+            <!-- 原本的課程卡片牆 (沒有搜尋時顯示) -->
+            <div id="knowledgeCardGrid" class="card-grid">
+                <p style="text-align:center; width:100%;">正在整理您的書架...</p>
             </div>
         </div>
-       
+
+        <!-- 2. 閱讀區：詳細筆記 + 側邊欄 (預設隱藏) -->
+        <div id="knowledgeReaderView" style="display: none;">
+                <!-- 返回按鈕列 -->
+                <div class="reader-toolbar">
+                    <button class="btn-back-library" onclick="switchKnowledgeView('library')">
+                        ← 返回課程總覽
+                    </button>
+                    <h4 id="currentReaderTitle" style="margin:0; color:#333;"></h4>
+                </div>
+
+                <div class="knowledge-hub-layout" style="display: block; width: 100%;">
+                    <div class="main-notes-content" style="width: 100%; max-width: 1000px; margin: 0 auto;">
+                        <div id="knowledgeHubContainer" class="knowledge-hub-container">
+                            <!-- 內容由 JS 填充 -->
+                        </div>
+                    </div>
+                    <!-- 這裡原本的 aside 已經刪除 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 頁籤 3: AI 練習 -->
         <div id="workbookTab" class="tab-content">
             <h3>AI 練習</h3>
-            <p>根據課堂筆記的每個主題，AI 為你生成了專屬的練習，來檢驗一下學習成效吧！</p>
-            
+            <!-- <p>根據課堂筆記的每個主題，AI 為你生成了專屬的練習，來檢驗一下學習成效吧！</p> -->
             <div id="workbookContainer" class="workbook-container">
-                <!-- 練習任務卡片將由 JS 動態生成於此 -->
-                <!-- <p id="workbookLoadingMessage" class="text-center" style="padding: 20px;">正在為您加載挑戰任務...</p> -->
+                <p id="workbookLoadingMessage" class="text-center" style="padding: 20px;">正在為您加載挑戰任務...</p>
             </div>
         </div>
 

@@ -3302,3 +3302,1086 @@ option:hover {
 #macroTimelineVisualizer .informal-content {
     background-color: #F5A623;
 }
+
+/* --- 新增：逐段洞察卡片中四維行為的顏色定義 --- */
+.bar-segment.active-engagement, .legend-item.active-engagement::before {
+    background-color: #4BC0C0; /* 青色 */
+}
+.legend-item.active-engagement {
+    color: #4BC0C0;
+}
+
+.bar-segment.passive-engagement, .legend-item.passive-engagement::before {
+    background-color: #36A2EB; /* 藍色 */
+}
+.legend-item.passive-engagement {
+    color: #36A2EB;
+}
+
+.bar-segment.disengaged, .legend-item.disengaged::before {
+    background-color: #FF6384; /* 紅色 */
+}
+.legend-item.disengaged {
+    color: #FF6384;
+}
+
+.bar-segment.ambiguous-behavior, .legend-item.ambiguous-behavior::before {
+    background-color: #C9CBCF; /* 灰色 */
+}
+.legend-item.ambiguous-behavior {
+    color: #888;
+}
+
+/* (可選，但建議) 確保圖例顏色塊的基礎樣式存在 */
+.distribution-legend .legend-item::before {
+    content: '';
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    margin-right: 6px;
+    display: inline-block;
+}
+
+.tooltip-transcript {
+    /* 設定一個最大高度，避免提示框過長 */
+    max-height: 250px; 
+    /* 當內容超出最大高度時，顯示垂直捲動軸 */
+    overflow-y: auto; 
+    /* 保持文字內的換行與空白，並在需要時自動換行 */
+    white-space: pre-wrap; 
+    background-color: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    margin-top: 8px; /* 與上方資訊增加間距 */
+    font-size: 0.9em;
+    line-height: 1.6;
+    color: #333;
+}
+
+.tooltip-title {
+    position: relative; /* 為了讓關閉按鈕可以絕對定位 */
+    padding-right: 25px; /* 避免標題文字與關閉按鈕重疊 */
+}
+
+.tooltip-close-btn {
+    position: absolute;
+    top: 0;
+    right: 8px;
+    font-size: 24px;
+    font-weight: bold;
+    line-height: 1;
+    color: #aaa;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.tooltip-close-btn:hover {
+    color: #333;
+}
+
+/* 美化捲動軸樣式 (適用於 Webkit 核心的瀏覽器如 Chrome, Edge, Safari) */
+.tooltip-transcript::-webkit-scrollbar {
+    width: 8px;
+}
+
+.tooltip-transcript::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.tooltip-transcript::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+.tooltip-transcript::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+#contentTimelineTooltip {
+    pointer-events: auto !important;
+}
+
+.tooltip-section {
+    border-top: 1px solid #eee;
+    padding-top: 8px;
+    margin-top: 8px;
+}
+.trigger-list {
+    list-style-type: disc;
+    padding-left: 20px;
+    margin: 5px 0;
+    font-style: italic;
+    color: #ffffff;
+}
+.trigger-list li {
+    margin-bottom: 4px;
+}
+
+.tooltip-transcript-collapsible summary {
+    cursor: pointer;
+    color: #007bff;
+    font-weight: bold;
+    margin-top: 10px;
+    outline: none; /* 移除點擊時的預設外框 */
+}
+
+.tooltip-transcript-collapsible summary:hover {
+    text-decoration: underline;
+}
+
+.tooltip-transcript-collapsible .full-transcript-content {
+    margin-top: 8px;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-left: 3px solid #ccc;
+    max-height: 200px; /* 限制最大高度，超出部分會出現滾動條 */
+    overflow-y: auto;
+    font-size: 0.9em;
+    line-height: 1.5;
+    color: #333;
+}
+
+/* --- 全新 v2.0 雙層熱力圖時間軸樣式 --- */
+.focus-timeline-wrapper {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.timeline-description {
+    font-size: 0.9em;
+    color: #6c757d;
+    margin-bottom: 10px;
+}
+
+.focus-timeline-bar {
+    display: flex;
+    width: 100%;
+    height: 35px; /* 宏觀和微觀的高度可以調整 */
+    border-radius: 5px;
+    overflow: hidden;
+    cursor: pointer;
+}
+
+.macro-heatmap .heatmap-segment,
+.micro-segmented .micro-bar-container {
+    height: 100%;
+    transition: filter 0.2s ease-in-out;
+}
+
+.focus-timeline-bar:hover .heatmap-segment,
+.focus-timeline-bar:hover .micro-bar-container {
+    filter: brightness(1.05); /* 增加一點懸浮效果 */
+}
+
+/* 微觀分段長條圖的容器 */
+.micro-bar-container {
+    display: flex;
+    width: 100%; /* 每個容器自身佔滿分配的空間 */
+}
+
+/* 微觀長條圖中的每一個小色塊 */
+.micro-segment {
+    height: 100%;
+}
+
+.note-container {
+    display: flex;
+    flex-wrap: wrap; /* 在小螢幕上允許換行 */
+    gap: 20px; /* 左右欄之間的間距 */
+}
+
+.note-text-column {
+    flex: 2; /* 文字部分佔據約 2/3 的寬度 */
+    min-width: 300px; /* 最小寬度，防止過度壓縮 */
+}
+
+.note-image-column {
+    flex: 1; /* 圖片部分佔據約 1/3 的寬度 */
+    min-width: 250px;
+}
+
+.note-image-column .gallery-item {
+    margin-bottom: 15px;
+}
+
+.note-image-column .gallery-item img {
+    width: 100%; /* 讓圖片寬度自適應容器 */
+    height: auto;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* 樣式化新的手風琴詳細列表 */
+.accordion-item {
+    margin-bottom: 5px;
+}
+
+.accordion-button-details {
+    background-color: #f1f1f1;
+    color: #444;
+    cursor: pointer;
+    padding: 12px 18px;
+    width: 100%;
+    border: none;
+    text-align: left;
+    outline: none;
+    font-size: 15px;
+    transition: background-color 0.4s ease;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.accordion-button-details:hover, .accordion-button-details.active {
+    background-color: #ddd;
+}
+
+.accordion-button-details .accordion-icon::after {
+    content: '\002B'; /* 加號 '+' */
+    font-size: 13px;
+    color: #777;
+}
+
+.accordion-button-details.active .accordion-icon::after {
+    content: "\2212"; /* 減號 '-' */
+}
+
+.accordion-panel-details {
+    padding: 0 18px;
+    background-color: white;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.2s ease-out;
+    border: 1px solid #f1f1f1;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+}
+
+/* 讓手風琴內的表格更好看 */
+.accordion-panel-details table {
+    width: 100%;
+    margin-top: 15px;
+    margin-bottom: 15px;
+    border-collapse: collapse;
+}
+.accordion-panel-details th, .accordion-panel-details td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+.accordion-panel-details th {
+    background-color: #f9f9f9;
+}
+
+/* AI 練習頁籤的專屬樣式 */
+.workbook-container .mission-card {
+    background-color: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.workbook-container .accordion-button {
+    /* 這裡可以繼承您現有的 accordion-button 樣式 */
+}
+
+.workbook-container .accordion-panel {
+    /* 這裡可以繼承您現有的 accordion-panel 樣式 */
+    padding: 15px 25px; /* 增加面板內邊距 */
+}
+
+.review-section {
+    border-bottom: 1px dashed #ccc;
+    padding-bottom: 20px;
+    margin-bottom: 20px;
+}
+
+.challenge-section {
+    padding-top: 10px;
+}
+
+.topic-section {
+    margin-bottom: 15px;
+}
+.topic-section h5 {
+    font-size: 1.1em;
+    color: #333;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 5px;
+    margin-bottom: 10px;
+}
+
+.image-gallery {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.gallery-item {
+    flex-basis: calc(33.333% - 10px); /* 每行最多三張圖 */
+    text-align: center;
+}
+
+.gallery-item img {
+    max-width: 100%;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 1px solid #ddd;
+}
+.gallery-item .image-description {
+    font-size: 0.8em;
+    color: #666;
+    margin-top: 5px;
+}
+
+.quiz-item {
+    margin-bottom: 25px;
+    padding: 15px;
+    border-left: 3px solid #f0f0f0;
+}
+.quiz-item strong {
+    font-weight: 600;
+}
+
+.quiz-option {
+    display: block;
+    margin: 8px 0;
+    cursor: pointer;
+}
+.quiz-input, .quiz-textarea {
+    width: 100%;
+    padding: 8px;
+    margin-top: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1em;
+}
+.quiz-textarea {
+    min-height: 80px;
+    resize: vertical;
+}
+
+.quiz-hint-wrapper {
+    font-size: 0.9em;
+    color: #888;
+    margin-top: 5px;
+}
+
+.submit-quiz-button {
+    background-color: #007bff;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.2s;
+}
+.submit-quiz-button:hover {
+    background-color: #0056b3;
+}
+
+.feedback-area {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 4px;
+}
+.feedback-area .correct {
+    color: #28a745;
+    font-weight: bold;
+}
+.feedback-area .incorrect {
+    color: #dc3545;
+    font-weight: bold;
+}
+.feedback-area .explanation {
+    font-size: 0.9em;
+    color: #555;
+    margin-top: 5px;
+    border-top: 1px solid #eee;
+    padding-top: 5px;
+}
+
+.challenge-section {
+    padding-top: 10px;
+    /* 移除邊框，因為它現在是第一個區塊 */
+}
+
+.review-toggle-button {
+    background-color: #e7f3ff;
+    color: #0056b3;
+    border: 1px solid #b3d7ff;
+    padding: 8px 15px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: 500;
+    margin-top: 20px;
+    display: block; /* 確保它能被看到 */
+    transition: all 0.2s ease;
+}
+.review-toggle-button:hover {
+    background-color: #d0e7ff;
+}
+
+.review-section-full {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    border: 1px solid #e9ecef;
+}
+
+/* 答錯時顯示的知識點片段樣式 */
+.knowledge-snippet {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: #fffbe6;
+    border-left: 3px solid #ffe58f;
+    font-size: 0.9em;
+}
+.knowledge-snippet h5 {
+    margin-top: 0;
+    font-size: 1em;
+}
+
+/* 1. 雙欄佈局的父容器 */
+.knowledge-hub-layout {
+    display: flex; /* 啟用 Flexbox 佈局 */
+    flex-wrap: wrap; /* 允許在小螢幕上換行 */
+    gap: 30px; /* 在主內容和側邊欄之間創建間距 */
+}
+
+/* 2. 主筆記內容區 (左側) */
+.main-notes-content {
+    flex: 2; /* 佔用 2 個彈性單位 (大約 66% 寬) */
+    min-width: 300px; /* 確保在螢幕縮小時不會被過度擠壓 */
+}
+
+/* 3. 索引側邊欄 (右側) */
+.notes-sidebar {
+    flex: 1; /* 佔用 1 個彈性單位 (大約 33% 寬) */
+    max-width: 100%; /* 在小螢幕上允許佔滿全寬 */
+    border-left: 1px solid #e0e0e0; /* 添加一條分隔線 */
+    padding-left: 20px; /* 分隔線與內容的間距 */
+}
+
+/* 4. 響應式設計：當螢幕寬度小於 992px (平板或手機) */
+@media (max-width: 992px) {
+    .knowledge-hub-layout {
+        flex-direction: column; /* 將佈局方向改為垂直堆疊 */
+    }
+    .notes-sidebar {
+        border-left: none; /* 移除左側分隔線 */
+        border-top: 1px solid #e0e0e0; /* 在頂部添加分隔線 */
+        padding-left: 0; /* 移除左側內邊距 */
+        padding-top: 20px; /* 添加頂部內邊距 */
+        margin-top: 20px;  /* 與上方內容的間距 */
+    }
+}
+
+/* (可選) 優化側邊欄中手風琴按鈕的樣式 */
+.notes-sidebar .accordion-button {
+    background-color: #f8f9fa; /* 給側邊欄的按鈕一個淺色背景 */
+}
+.accordion-panel ul {
+    padding-bottom: 20px; /* 在列表下方增加 10px 的內邊距作為緩衝 */
+}
+
+/* 索引區塊的整體容器樣式 */
+.topics-index-list {
+    padding: 10px;
+    background-color: #f9f9f9; /* 給一個淡淡的背景色以區分 */
+    border: 1px solid #eee;
+    border-radius: 8px;
+}
+
+/* 日期標題的樣式 (例如: 報告 - 2025年09月28日) */
+.topic-date-heading {
+    font-size: 1.1em;           /* 字體稍大 */
+    font-weight: 600;           /* 字體加粗 */
+    color: #333;               /* 深灰色字體 */
+    margin-top: 20px;           /* 與上一個列表的間距 */
+    margin-bottom: 12px;          /* 與下方列表的間距 */
+    padding-bottom: 8px;          /* 標題下方的內邊距 */
+    border-bottom: 1px solid #ddd; /* 底部加上一條分隔線 */
+}
+
+/* 讓第一個日期標題沒有上方間距 */
+.topic-date-heading:first-of-type {
+    margin-top: 5px;
+}
+
+/* 知識點列表 (ul) 的樣式 */
+.topic-list {
+    list-style-type: disc;      /* 使用實心圓點作為項目符號 */
+    padding-left: 0;            /* 移除預設的左邊內邊距 */
+    margin-left: 20px;          /* 透過外邊距來控制縮排 */
+}
+
+/* 每個知識點列表項 (li) 的樣式 */
+.topic-list li {
+    margin-bottom: 10px;        /* 增加每個知識點之間的垂直間距 */
+}
+
+/* 知識點連結 (a) 的樣式 */
+.topic-list a {
+    text-decoration: none;      /* 移除預設的底線 */
+    color: #007bff;            /* 使用藍色來表示可點擊 */
+    transition: color 0.2s ease; /* 增加滑鼠移過時的顏色變化動畫 */
+}
+
+/* 滑鼠移到連結上時的樣式 */
+.topic-list a:hover {
+    text-decoration: underline; /* 滑鼠移過時顯示底線 */
+    color: #0056b3;            /* 顏色加深 */
+}
+
+/* 選項按鈕樣式 */
+.block-option {
+    display: block;
+    margin-bottom: 8px;
+    padding: 8px 12px;
+    border: 1px solid #eee;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.block-option:hover {
+    background-color: #f9f9f9;
+}
+
+/* 選中時的高亮效果 (這需要配合 JS 改變 class，或者簡單用 :checked 選擇器) */
+.block-option input:checked + .option-text {
+    font-weight: bold;
+    color: #007bff;
+}
+
+/* 下一題按鈕 */
+.next-quiz-button:hover {
+    background-color: #218838 !important;
+}
+
+/* --- 練習卡片與遊戲化樣式 --- */
+
+/* 1. 卡片本體：預設左側灰色條 */
+.mission-card .accordion-button {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-left: 5px solid #ccc; /* 預設灰色 */
+    padding: 15px 20px;
+    transition: all 0.3s ease;
+}
+
+/* 2. 完成狀態 (遊戲化)：綠色邊框 + 淡綠背景 */
+.mission-card.completed .accordion-button {
+    border-left-color: #28a745;
+    background-color: #f0fff4; /* 淡綠色背景 */
+}
+
+.mission-card.in-progress .accordion-button {
+    border-left-color: #007bff; /* 進行中藍色 */
+}
+
+/* 3. 視覺層級優化 */
+.topic-info {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+}
+
+.topic-meta {
+    font-size: 0.85em;
+    color: #888; /* 弱化編號 */
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+}
+
+.topic-title {
+    font-size: 1.25em;
+    font-weight: 700;
+    color: #2c3e50; /* 強化標題，深藍色 */
+}
+
+/* 4. 狀態標籤 (Badges) */
+.status-badge {
+    font-size: 0.85em;
+    padding: 5px 10px;
+    border-radius: 12px;
+    font-weight: bold;
+    color: white;
+    min-width: 80px;
+    text-align: center;
+    display: inline-block;
+}
+
+.badge-gray { background-color: #b0b0b0; } /* 未開始 */
+.badge-blue { background-color: #007bff; } /* 進行中 */
+.badge-green { background-color: #28a745; } /* 已完成 */
+
+/* 5. 星星評價 */
+.star-rating {
+    color: #ffc107; /* 金黃色 */
+    margin-right: 10px;
+    font-size: 1.1em;
+    letter-spacing: 2px;
+}
+
+.mission-card .accordion-button::after {
+    display: none !important;
+    content: none !important;
+    background-image: none !important;
+}
+
+/* 設定黑色箭頭的過渡動畫 */
+.accordion-icon {
+    display: inline-block;
+    transition: transform 0.3s ease; /* 平滑旋轉 */
+}
+
+/* 當按鈕被點擊並加上 'active' class 時，讓箭頭旋轉 180 度 */
+.accordion-button.active .accordion-icon {
+    transform: rotate(180deg);
+}
+
+/* --- 總覽區：卡片網格 --- */
+.library-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); /* 自動響應式排版 */
+    gap: 20px;
+    padding: 10px;
+}
+
+.course-card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.course-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+    border-color: #4a90e2;
+}
+
+.course-date {
+    font-size: 0.9rem;
+    color: #888;
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+
+.course-title {
+    font-size: 1.2rem;
+    color: #333;
+    margin-bottom: 15px;
+    font-weight: 600;
+}
+
+.course-topics-preview {
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.course-topics-preview ul {
+    padding-left: 20px;
+    margin: 0;
+}
+
+.course-topics-preview li {
+    margin-bottom: 4px;
+}
+
+/* --- 閱讀區：工具列 --- */
+.reader-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.btn-back-library {
+    background-color: #f8f9fa;
+    border: 1px solid #ddd;
+    padding: 8px 15px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background 0.2s;
+}
+
+.btn-back-library:hover {
+    background-color: #e2e6ea;
+}
+
+/* --- 閱讀區：佈局與側邊欄 (關鍵優化) --- */
+.knowledge-hub-layout {
+    display: flex;
+    gap: 30px;
+    align-items: flex-start; /* 重要：讓 sticky 生效 */
+    position: relative;
+}
+
+.main-notes-content {
+    flex: 3; /* 內容佔 75% */
+    min-width: 0;
+}
+
+.notes-sidebar {
+    flex: 1; /* 側邊欄佔 25% */
+    background: #fff;
+    border-left: 1px solid #eee;
+    padding-left: 20px;
+    
+    /* 【關鍵】讓側邊欄固定在螢幕右側，不會隨內容捲動消失 */
+    position: sticky;
+    top: 20px; 
+    height: calc(100vh - 40px); /* 限制高度 */
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-header {
+    margin-bottom: 15px;
+}
+
+#topicSearchInput {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    margin-top: 5px;
+}
+
+/* 側邊欄內容捲動區 */
+.sidebar-scroll-area {
+    overflow-y: auto; /* 內容太多時，只有這裡會捲動 */
+    flex-grow: 1;
+    padding-right: 5px; /* 避免捲軸蓋住文字 */
+}
+
+/* 自定義捲軸樣式 (Webkit) */
+.sidebar-scroll-area::-webkit-scrollbar {
+    width: 6px;
+}
+.sidebar-scroll-area::-webkit-scrollbar-thumb {
+    background-color: #ccc;
+    border-radius: 3px;
+}
+
+/* 側邊欄列表樣式優化 */
+.topics-index-list h4 {
+    font-size: 1rem;
+    color: #333;
+    margin-top: 20px;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #f0f0f0;
+    padding-bottom: 5px;
+}
+
+.topic-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.topic-list li {
+    margin-bottom: 8px;
+}
+
+.topic-list li a {
+    text-decoration: none;
+    color: #555;
+    display: block;
+    padding: 5px 8px;
+    border-radius: 4px;
+    transition: background 0.2s;
+    font-size: 0.95rem;
+}
+
+.topic-list li a:hover {
+    background-color: #f0f8ff;
+    color: #007bff;
+}
+
+/* 當前選中的主題高亮 */
+.topic-list li a.active-topic {
+    background-color: #e7f1ff;
+    color: #0056b3;
+    font-weight: bold;
+    border-left: 3px solid #0056b3;
+}
+
+/* =========================================
+   教材審核與編輯 (Workbook Review) 樣式
+   ========================================= */
+
+/* 1. 題目編輯區塊容器 */
+.quiz-editor-item {
+    background-color: #f8f9fa; /* 淺灰背景，與白底區分 */
+    padding: 20px;
+    margin-bottom: 20px;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02); /* 極輕微的陰影 */
+    transition: border-color 0.2s;
+}
+
+.quiz-editor-item:hover {
+    border-color: #b3d7ff; /* 滑鼠移過去時邊框微亮 */
+}
+
+/* 2. 輸入框與文本區域通用樣式 */
+.editor-input {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #495057;
+    background-color: #fff;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    box-sizing: border-box; /* 確保 padding 不會撐大寬度 */
+}
+
+/* 輸入框獲得焦點時的效果 */
+.editor-input:focus {
+    border-color: #80bdff;
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25); /* 藍色光暈 */
+}
+
+/* 3. 文本區域 (Textarea) 特別設定 */
+textarea.editor-input {
+    min-height: 80px; /* 設定最小高度，避免太扁 */
+    resize: vertical; /* 只允許垂直拉伸 */
+    font-family: inherit; /* 繼承網頁字體 */
+}
+
+/* 4. 標籤樣式 */
+.form-group {
+    margin-bottom: 15px; /* 每個輸入框之間的距離 */
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 600;
+    color: #555;
+    font-size: 0.95em;
+}
+
+/* 5. 全寬輔助類別 (JS 中有用到 full-width class) */
+.full-width {
+    width: 100%;
+}
+
+/* 6. 底部操作區 (儲存按鈕區) */
+.review-actions {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 2px dashed #eee;
+    text-align: right; /* 按鈕靠右 */
+    background-color: #fff;
+    
+    /* 讓按鈕區在內容長時可以黏在底部 (選用) */
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    padding-bottom: 20px; 
+}
+
+/* 7. 儲存按鈕特別樣式 */
+#saveWorkbookBtn {
+    padding: 10px 24px;
+    font-size: 16px;
+    font-weight: bold;
+    background-color: #28a745; /* 綠色代表成功/儲存 */
+    border: none;
+    border-radius: 5px;
+    color: white;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    transition: background-color 0.2s;
+}
+
+#saveWorkbookBtn:hover {
+    background-color: #218838;
+}
+
+#saveWorkbookBtn:disabled {
+    background-color: #94d3a2;
+    cursor: not-allowed;
+}
+
+/* 8. 儲存狀態文字 */
+#saveStatus {
+    font-size: 0.9em;
+    margin-right: 15px;
+    font-weight: bold;
+    animation: fadeIn 0.5s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+#aiGeneratedReport p:empty {
+    display: none;
+}
+
+/* 搜尋框容器 */
+.global-search-container {
+    position: relative;
+    max-width: 600px;
+    margin: 20px auto 30px; /* 置中並留出距離 */
+}
+
+/* 搜尋輸入框 */
+#globalSearchInput {
+    width: 100%;
+    padding: 12px 20px;
+    padding-right: 40px; /* 留給清除按鈕的空間 */
+    font-size: 16px;
+    border: 2px solid #e0e0e0;
+    border-radius: 30px;
+    outline: none;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+#globalSearchInput:focus {
+    border-color: #4a90e2;
+    box-shadow: 0 4px 10px rgba(74, 144, 226, 0.2);
+}
+
+/* 清除按鈕 */
+#clearSearchBtn {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #999;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+/* 搜尋結果列表樣式 (模仿手風琴的外觀) */
+.search-result-item {
+    background-color: #fff;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    padding: 15px 20px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    border-left: 5px solid #4a90e2; /* 左側藍色線條增加識別度 */
+}
+
+.search-result-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    background-color: #f9fcff;
+}
+
+.result-date-tag {
+    font-size: 0.85em;
+    color: #888;
+    margin-bottom: 5px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+}
+
+.result-date-tag::before {
+    content: '📅';
+    margin-right: 5px;
+}
+
+.result-topic-title {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #333;
+}
+
+/* 關鍵字高亮 */
+.highlight-text {
+    background-color: #fff3cd;
+    color: #856404;
+    padding: 0 2px;
+    border-radius: 2px;
+}
+
+/* 搜尋結果內容容器 (預設隱藏) */
+.search-result-body {
+    display: none; /* 預設收合 */
+    border-top: 1px dashed #eee;
+    margin-top: 10px;
+    padding-top: 15px;
+    background-color: #fcfcfc;
+    border-radius: 0 0 8px 8px;
+}
+
+/* 展開時的動畫效果 */
+.search-result-item.expanded .search-result-body {
+    display: block;
+    animation: slideDown 0.3s ease-out;
+}
+
+/* 展開狀態的箭頭旋轉 */
+.search-result-item.expanded .expand-icon {
+    transform: rotate(180deg);
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* 內容區塊樣式 (復用原本筆記的樣式) */
+.note-text-block {
+    font-size: 1em;
+    line-height: 1.6;
+    color: #444;
+    margin-bottom: 15px;
+}
+
+.note-image-block img {
+    max-width: 100%;
+    border-radius: 5px;
+    border: 1px solid #ddd;
+    margin-top: 10px;
+}

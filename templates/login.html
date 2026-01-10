@@ -15,16 +15,16 @@
     <form id="loginForm" method="POST">
         <div>
             <label for="username">帳號:</label>
-            <input type="text" id="username" name="username" value="a123" required>
+            <!-- 這裡移除了 value="a123" -->
+            <input type="text" id="username" name="username" required>
         </div>
         <div>
             <label for="password">密碼:</label>
-            <input type="password" id="password" name="password" value="a123" required>
+            <!-- 這裡也移除了 value="a123" -->
+            <input type="password" id="password" name="password" required>
         </div>
         <button type="submit" onclick="logUserClick('button_login_submit')">登入</button>
     </form>
-    <p>學生測試帳號: a123 / a123</p>
-    <p>教師測試帳號: b123 / b123</p>
 </div>
 {% endblock %}
 
